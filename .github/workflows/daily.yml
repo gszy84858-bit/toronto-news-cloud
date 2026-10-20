@@ -73,6 +73,23 @@ jobs:
       - name: 构建手机网页
         run: python3 build_site.py
 
+      # 闸门：只要有任何冲突标记，就不许发布。
+      - name: 发布前自检（拦截 git 冲突标记）
+        run: |
+          if grep -rEq '^(<<<<<<< |=======$|>>>>>>> )' docs; then
+            echo "::error title=检测到冲突标记::docs/ 里混入了 git 冲突标记，已阻止发布。请检查最近一次合并。"
+            exit 1
+          fi
+          echo "自检通过：docs/ 无冲突标记"
+
+      # 打包必须放在「保存本期」之前！
+      # git pull --rebase 一旦冲突，会把冲突标记写进工作区；若那之后再打包，
+      # 就会把带 <<<<<<< HEAD 的页面发布上线（今天就是这么翻车的）。
+      - name: 打包网页
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
       - name: 保存本期（保留往期，供下次去重与归档）
         run: |
           git config user.name  "github-actions[bot]"
@@ -82,15 +99,15 @@ jobs:
             echo "内容无变化，跳过提交"
           else
             git commit -m "早报自动更新 $(TZ=America/Toronto date +%Y-%m-%d)"
-            # 排队的多个运行会互相抢提交，先变基再推，失败也不算整个流程失败
-            git pull --rebase origin main || true
-            git push || echo "::warning::本期内容已生成并部署到网页，仅归档提交未推上（下次运行会重试）"
+            # 排队的多个运行会互相抢提交：先变基再推。
+            # 变基冲突必须 abort，否则工作区会残留冲突标记。
+            if ! git pull --rebase origin main; then
+              git rebase --abort || true
+              echo "::warning::远端有新提交，本期归档未推上（网页已发布，明天自动重试）"
+            else
+              git push || echo "::warning::归档推送失败（网页已发布，明天自动重试）"
+            fi
           fi
-
-      - name: 打包网页
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs
 
       - name: 发布到公网
         id: deploy
