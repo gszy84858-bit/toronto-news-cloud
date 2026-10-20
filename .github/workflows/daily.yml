@@ -8,6 +8,15 @@ on:
     # GitHub 的定时器用 UTC。13:45 UTC = 多伦多上午 9:45（夏令时 EDT）
     # 冬令时（EST, UTC-5）会变成上午 8:45 —— 两种情况都在 10 点前，符合需求。
     - cron: "45 13 * * *"
+  push:
+    branches: [main]
+    # 只有「代码或配置」变了才自动跑。
+    # 云端自己归档早报时只改 output/ 和 docs/，不在列表里 → 不会自己触发自己。
+    paths:
+      - "generate.py"
+      - "build_site.py"
+      - "config/**"
+      - ".github/workflows/daily.yml"
   workflow_dispatch:            # 也支持手动点一下立刻生成
     inputs:
       force:
