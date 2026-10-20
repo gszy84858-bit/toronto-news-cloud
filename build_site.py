@@ -16,7 +16,9 @@
 """
 
 import html as html_mod
+import json
 import os
+import time
 import re
 import shutil
 import sys
@@ -47,20 +49,60 @@ def collect():
     return rows
 
 
-NAV_BAR = """
+# 构建版本号：每次构建都变，用来判断「浏览器里那一页是不是旧的」
+BUILD_ID = str(int(time.time()))
+
+
+def nav_bar(active, build):
+    """顶部红条。首页给「刷新 + 往期」，往期页给「刷新 + 回最新」。"""
+    if active == "index":
+        other, label = "list.html?v=%s" % build, "往期"
+    else:
+        other, label = "index.html?v=%s" % build, "回最新"
+    return """
 <div style="position:sticky;top:0;z-index:99;background:#d60621;color:#fff;
 font:14px/1.4 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;
 padding:9px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
 <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
 🍁 多伦多新闻早报</span>
 <span style="display:flex;gap:8px;flex:0 0 auto;">
-<button id="tnRefresh" onclick="tnForceReload()" style="color:#fff;background:transparent;
+<button onclick="tnForceReload()" style="color:#fff;background:transparent;
 border:1px solid rgba(255,255,255,.6);border-radius:6px;padding:3px 10px;font-size:13px;
 font-family:inherit;cursor:pointer;">刷新</button>
-<a href="list.html" style="color:#fff;text-decoration:none;font-size:13px;
-border:1px solid rgba(255,255,255,.6);border-radius:6px;padding:3px 10px;">往期</a>
+<a href="%s" style="color:#fff;text-decoration:none;font-size:13px;
+border:1px solid rgba(255,255,255,.6);border-radius:6px;padding:3px 10px;">%s</a>
 </span>
 </div>
+""" % (other, label)
+
+
+# 旧版本自愈脚本：手机里缓存的那一页若与服务器版本不一致，自动拉最新一版。
+# 针对的就是「两台手机看到的内容不一样」——多半是某台缓存了部署前的旧页面。
+SYNC_JS = """
+<script>
+var TN_BUILD="__BUILD__";
+function tnForceReload(){ location.replace(location.origin+location.pathname+"?t="+Date.now()); }
+var tnChecking=false;
+function tnCheck(){
+  if(tnChecking) return; tnChecking=true;
+  try{
+    fetch("meta.json?t="+Date.now(),{cache:"no-store"})
+    .then(function(r){return r.json();})
+    .then(function(m){
+      tnChecking=false;
+      if(!m||!m.build||String(m.build)===String(TN_BUILD)) return;
+      var k="tnB"+String(m.build);
+      try{ if(sessionStorage.getItem(k)) return; sessionStorage.setItem(k,"1"); }catch(e){}
+      location.replace(location.origin+location.pathname+"?v="+String(m.build));
+    })
+    .catch(function(){ tnChecking=false; });
+  }catch(e){ tnChecking=false; }
+}
+window.addEventListener("pageshow", function(e){ if(e.persisted) tnCheck(); });
+document.addEventListener("visibilitychange", function(){ if(!document.hidden) tnCheck(); });
+setTimeout(tnCheck, 3000);
+setInterval(tnCheck, 300000);
+</script>
 """
 
 # 放在正文最前面，只有「今天这期还没生成」时才有内容
@@ -103,9 +145,11 @@ def build_index(rows):
         html = f.read()
 
     today = datetime.now().strftime("%Y-%m-%d")
-    nav = NAV_BAR + (
+    # 显示「更新于几点」，一眼就能看出手机上这一页是不是最新的
+    stamp = datetime.now().strftime("%H:%M")
+    nav = nav_bar("index", BUILD_ID) + (
         '<div style="text-align:center;color:#8a8984;font-size:12px;padding:6px 0 2px;">'
-        '最新一期：%s</div>' % esc(latest_date))
+        '最新一期：%s · 更新于 %s EDT</div>' % (esc(latest_date), stamp))
     inject = nav + BANNER
 
     # 禁缓存，保证主屏图标每次都是新的
@@ -122,7 +166,8 @@ def build_index(rows):
     else:
         html = inject + html
 
-    js = RETRY_JS.replace("__TODAY__", today).replace("__LATEST__", latest_date)
+    js = (RETRY_JS.replace("__TODAY__", today).replace("__LATEST__", latest_date)
+          + SYNC_JS.replace("__BUILD__", BUILD_ID))
     if "</body>" in html:
         html = html.replace("</body>", js + "</body>", 1)
     else:
@@ -144,7 +189,7 @@ def build_list(rows):
                      '<span class="w">%s</span>%s</a>'
                      % (esc(quote(fn)), int(d[5:7]), int(d[8:10]), wd, badge))
     items_html = "\n".join(items) or '<a class="item"><span class="d">暂无期刊</span></a>'
-    return """<!DOCTYPE html>
+    page = """<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -171,14 +216,16 @@ font-size:11.5px;padding:2px 8px;margin-left:8px;vertical-align:2px}
 footer{color:var(--mut);font-size:12px;margin-top:26px;text-align:center}
 .back{display:block;text-align:center;margin-bottom:18px;color:var(--acc);
 text-decoration:none;font-size:14px}
-</style></head><body><div class="wrap">
+</style></head><body>__NAV__<div class="wrap">
 <header><h1>🍁 多伦多新闻早报 · 往期</h1>
 <p class="sub">云端每天自动更新 · 与电脑版内容完全相同</p></header>
-<a class="back" href="index.html">← 返回最新一期</a>
 %s
 <footer>任何手机 · 任何网络 · 都能打开</footer>
 </div>
+__JS__
 </body></html>""" % items_html
+    return (page.replace("__NAV__", nav_bar("list", BUILD_ID))
+                .replace("__JS__", SYNC_JS.replace("__BUILD__", BUILD_ID)))
 
 
 def main():
@@ -208,6 +255,12 @@ def main():
     with open(os.path.join(OUT, "list.html"), "w", encoding="utf-8") as f:
         f.write(build_list(rows))
     open(os.path.join(OUT, ".nojekyll"), "w").close()
+
+    # 版本标记：手机上的页面拿它跟自己比对，发现自己旧了就自动更新
+    with open(os.path.join(OUT, "meta.json"), "w", encoding="utf-8") as f:
+        json.dump({"build": int(BUILD_ID), "latest": rows[0][0],
+                   "built_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
+                  f, ensure_ascii=False)
 
     print("站点已构建：%s（%d 期早报）" % (OUT, n))
     print("首页直接展示最新一期：%s" % rows[0][1])

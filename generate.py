@@ -865,11 +865,57 @@ def _strip_json_fence(s):
     return s
 
 
+def _gemini_ask(chunk, glossary, key, order, timeout):
+    """向 Gemini 发一批，返回结果数组（失败返回 None）。
+
+    依次尝试候选模型；429/5xx 退避重试，400/404（模型名失效）直接换下一个模型。
+    """
+    payload = {
+        "contents": [{"role": "user",
+                      "parts": [{"text": _ai_prompt(chunk, glossary)}]}],
+        "generationConfig": {
+            "temperature": 0.3,
+            "responseMimeType": "application/json",
+            "maxOutputTokens": 8192,
+        },
+    }
+    data_raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    for model in order:
+        url = GEMINI_ENDPOINT.format(model=model)
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(
+                    url, data=data_raw,
+                    headers={"Content-Type": "application/json",
+                             "x-goog-api-key": key},
+                    method="POST")
+                with urllib.request.urlopen(req, timeout=timeout) as r:
+                    data = json.loads(r.read().decode("utf-8", "replace"))
+                cands = data.get("candidates") or []
+                if not cands:
+                    raise ValueError("模型未返回候选内容")
+                parts = (cands[0].get("content") or {}).get("parts") or []
+                text = "".join(p.get("text", "") for p in parts)
+                return json.loads(_strip_json_fence(text))
+            except urllib.error.HTTPError as e:
+                if e.code in (429, 500, 502, 503, 504):
+                    time.sleep(2.0 * (attempt + 1))   # 限流/瞬时故障 → 退避重试
+                    continue
+                break                                 # 400/404 等 → 换下一个模型
+            except Exception:
+                if attempt < 2:
+                    time.sleep(1.5)
+                    continue
+                break
+    return None
+
+
 def ai_enrich_gemini(items, ai, quiet=False):
     """Gemini 原生 REST 通道：一次生成中文标题 + 中文摘要 + 经营提示。
 
     分小批发送（默认每批 5 条），避免长输出被 maxOutputTokens 截断；
-    遇到 429/503 退避重试，遇到模型名失效自动换下一个模型。
+    整批失败后**再逐条补跑一次**——整批失败多半是限流或输出被截断，
+    拆成单条重发成功率高得多，不至于半份早报没中文。
     """
     key = (ai.get("api_key") or os.environ.get("GEMINI_API_KEY")
            or os.environ.get("GOOGLE_API_KEY") or "").strip()
@@ -885,65 +931,38 @@ def ai_enrich_gemini(items, ai, quiet=False):
 
     batch = max(1, int(ai.get("batch_size", 5)))
     timeout = float(ai.get("timeout", 120))
-    last_err = ""
+    glossary = ai.get("glossary")
+
+    def apply_rows(chunk, rows):
+        # 大模型这一批成功了：先清掉规则引擎给的经营提示，避免张冠李戴
+        # （规则按关键词匹配，容易把"物流中断"贴到不相关的新闻上）。
+        # 大模型判断不相关时会返回空字符串，那就应当是空。
+        for it in chunk:
+            it["biz_advice"] = ""
+        _apply_ai_rows(chunk, rows)
 
     for start in range(0, len(items), batch):
         chunk = items[start:start + batch]
-        payload = {
-            "contents": [{"role": "user",
-                          "parts": [{"text": _ai_prompt(chunk, ai.get("glossary"))}]}],
-            "generationConfig": {
-                "temperature": 0.3,
-                "responseMimeType": "application/json",
-                "maxOutputTokens": 8192,
-            },
-        }
-        got = None
-        for model in order:
-            url = GEMINI_ENDPOINT.format(model=model)
-            for attempt in range(3):
-                try:
-                    req = urllib.request.Request(
-                        url,
-                        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                        headers={"Content-Type": "application/json",
-                                 "x-goog-api-key": key},
-                        method="POST")
-                    with urllib.request.urlopen(req, timeout=timeout) as r:
-                        data = json.loads(r.read().decode("utf-8", "replace"))
-                    cands = data.get("candidates") or []
-                    if not cands:
-                        raise ValueError("模型未返回候选内容")
-                    parts = (cands[0].get("content") or {}).get("parts") or []
-                    text = "".join(p.get("text", "") for p in parts)
-                    got = json.loads(_strip_json_fence(text))
-                    break
-                except urllib.error.HTTPError as e:
-                    last_err = "HTTP %s" % e.code
-                    if e.code in (429, 500, 502, 503, 504):
-                        time.sleep(2.0 * (attempt + 1))   # 限流/瞬时故障 → 退避重试
-                        continue
-                    break                                  # 400/404 等 → 换下一个模型
-                except Exception as e:
-                    last_err = type(e).__name__
-                    if attempt < 2:
-                        time.sleep(1.5)
-                        continue
-                    break
-            if got is not None:
-                break
+        got = _gemini_ask(chunk, glossary, key, order, timeout)
         if got is not None:
-            # 大模型这一批成功了：先清掉规则引擎给的经营提示，避免张冠李戴
-            # （规则按关键词匹配，容易把"物流中断"贴到不相关的新闻上）。
-            # 大模型判断不相关时会返回空字符串，那就应当是空。
-            for it in chunk:
-                it["biz_advice"] = ""
-            _apply_ai_rows(chunk, got)
+            apply_rows(chunk, got)
+
+    # 补跑：只对还没中文的条目逐条重发
+    missing = [i for i, it in enumerate(items) if not it.get("zh_summary")]
+    if missing and len(missing) < len(items):
+        for i in missing:
+            got = _gemini_ask([items[i]], glossary, key, order, timeout)
+            if got is not None:
+                apply_rows([items[i]], got)
+            time.sleep(0.5)          # 免费额度有限，别打太急
 
     ok_n = sum(1 for it in items if it.get("zh_summary"))
-    if ok_n:
+    if ok_n == len(items):
         return items, "Gemini 已生成 %d/%d 条中文" % (ok_n, len(items))
-    return items, "Gemini 调用失败（%s），已回退" % (last_err or "未知错误")
+    if ok_n:
+        return items, "Gemini 已生成 %d/%d 条中文（%d 条未成功，保留英文原文）" % (
+            ok_n, len(items), len(items) - ok_n)
+    return items, "Gemini 调用失败，已回退（本期保留英文原文）"
 
 
 def ai_enrich_openai(items, ai, quiet=False):
