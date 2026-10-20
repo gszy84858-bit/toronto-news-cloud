@@ -116,6 +116,22 @@ CACHE_META = ('<meta http-equiv="Cache-Control" content="no-cache, no-store, mus
               '<meta http-equiv="Expires" content="0">')
 
 
+MARKER_RE = re.compile(r"^<<<<<<< .*$|^=======$|^>>>>>>> .*$", re.M)
+
+
+def strip_conflict_markers(text, where=""):
+    """防御：git 合并冲突标记(<<<<<<< HEAD 等)绝不能出现在发布的网页里。
+
+    桌面端自动合并一旦把冲突文件提交进来，这里的兜底会把标记行删掉——
+    宁可内容有重复，也不能让用户看到 "<<<<<<< HEAD" 这种东西。
+    """
+    if MARKER_RE.search(text):
+        n = len(MARKER_RE.findall(text))
+        print("  ⚠ 检测到 git 冲突标记 %d 处（%s），已自动清除" % (n, where))
+        text = MARKER_RE.sub("", text)
+    return text
+
+
 def inject_chrome(html, build, active):
     """给任意一页装上禁缓存 + 顶部红条 + 版本自愈脚本。
 
@@ -175,7 +191,7 @@ def build_index(rows):
     """首页 = 最新一期早报全文（根网址直接可读，永不锁日期）。"""
     latest_date, latest_fn = rows[0]
     with open(os.path.join(SRC, latest_fn), encoding="utf-8") as f:
-        html = f.read()
+        html = strip_conflict_markers(f.read(), latest_fn)
 
     today = datetime.now().strftime("%Y-%m-%d")
     # 显示「更新于几点」，一眼就能看出手机上这一页是不是最新的
@@ -277,6 +293,7 @@ def main():
     for d, fn in rows:
         with open(os.path.join(SRC, fn), encoding="utf-8") as f:
             page = f.read()
+        page = strip_conflict_markers(page, fn)
         # 往期正文页也要有导航，否则点进去就出不来
         page = inject_chrome(page, BUILD_ID, "report")
         with open(os.path.join(OUT, fn), "w", encoding="utf-8") as f:
