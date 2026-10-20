@@ -42,7 +42,20 @@ table{width:100%;border-collapse:collapse;font-size:13.5px}
 td{padding:8px 0;border-bottom:1px solid var(--line);vertical-align:top}
 td:first-child{color:var(--mut);width:88px}
 footer{color:var(--mut);font-size:12px;margin-top:30px;text-align:center}
-</style></head><body><div class="wrap">
+</style><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0"></head><body>
+<div style="position:sticky;top:0;z-index:99;background:#d60621;color:#fff;
+font:14px/1.4 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;
+padding:9px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+<span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+🍁 多伦多新闻早报</span>
+<span style="display:flex;gap:8px;flex:0 0 auto;">
+<button onclick="tnForceReload()" style="color:#fff;background:transparent;
+border:1px solid rgba(255,255,255,.6);border-radius:6px;padding:3px 10px;font-size:13px;
+font-family:inherit;cursor:pointer;">刷新</button>
+<a href="index.html?v=1792522026" style="color:#fff;text-decoration:none;font-size:13px;border:1px solid rgba(255,255,255,.6);border-radius:6px;padding:3px 10px;">回最新</a><a href="list.html?v=1792522026" style="color:#fff;text-decoration:none;font-size:13px;border:1px solid rgba(255,255,255,.6);border-radius:6px;padding:3px 10px;">往期</a>
+</span>
+</div>
+<div class="wrap">
 <header><h1>🍁 多伦多新闻早报 · 2026年10月14日（周三）</h1>
 <div class="meta">精选 <b>10 条</b> · 覆盖窗口 10/13 10:54 – 10/14 22:54 EDT<br>全类别城市新闻 + 商业经贸与政策 + 科技创业　·　中文转换：大模型未配置 Gemini API Key，已回退</div>
 </header>
@@ -127,4 +140,29 @@ footer{color:var(--mut);font-size:12px;margin-top:30px;text-align:center}
 <tr><td>未收录</td><td>与多伦多/GTA 无关或未命中本地关键词 78 条；重要性排序未入选 41 条</td></tr>
 </table></div>
 <footer>由「多伦多新闻早报」独立程序 v2.0.0-cloud 于 2026-10-14 22:54:40 自动生成</footer>
-</div></body></html>
+</div>
+<script>
+var TN_BUILD="1792522026";
+function tnForceReload(){ location.replace(location.origin+location.pathname+"?t="+Date.now()); }
+var tnChecking=false;
+function tnCheck(){
+  if(tnChecking) return; tnChecking=true;
+  try{
+    fetch("meta.json?t="+Date.now(),{cache:"no-store"})
+    .then(function(r){return r.json();})
+    .then(function(m){
+      tnChecking=false;
+      if(!m||!m.build||String(m.build)===String(TN_BUILD)) return;
+      var k="tnB"+String(m.build);
+      try{ if(sessionStorage.getItem(k)) return; sessionStorage.setItem(k,"1"); }catch(e){}
+      location.replace(location.origin+location.pathname+"?v="+String(m.build));
+    })
+    .catch(function(){ tnChecking=false; });
+  }catch(e){ tnChecking=false; }
+}
+window.addEventListener("pageshow", function(e){ if(e.persisted) tnCheck(); });
+document.addEventListener("visibilitychange", function(){ if(!document.hidden) tnCheck(); });
+setTimeout(tnCheck, 3000);
+setInterval(tnCheck, 300000);
+</script>
+</body></html>
