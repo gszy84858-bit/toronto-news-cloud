@@ -54,11 +54,18 @@ BUILD_ID = str(int(time.time()))
 
 
 def nav_bar(active, build):
-    """顶部红条。首页给「刷新 + 往期」，往期页给「刷新 + 回最新」。"""
+    """顶部红条。首页「往期」；往期列表页「回最新」；
+    单期正文页**两个都给**——否则点进某一期往期就再也出不来了。"""
     if active == "index":
-        other, label = "list.html?v=%s" % build, "往期"
+        links = [("list.html?v=%s" % build, "往期")]
+    elif active == "list":
+        links = [("index.html?v=%s" % build, "回最新")]
     else:
-        other, label = "index.html?v=%s" % build, "回最新"
+        links = [("index.html?v=%s" % build, "回最新"),
+                 ("list.html?v=%s" % build, "往期")]
+    btns = "".join('<a href="%s" style="color:#fff;text-decoration:none;font-size:13px;'
+                   'border:1px solid rgba(255,255,255,.6);border-radius:6px;'
+                   'padding:3px 10px;">%s</a>' % (h, t) for h, t in links)
     return """
 <div style="position:sticky;top:0;z-index:99;background:#d60621;color:#fff;
 font:14px/1.4 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;
@@ -69,11 +76,10 @@ padding:9px 14px;display:flex;justify-content:space-between;align-items:center;g
 <button onclick="tnForceReload()" style="color:#fff;background:transparent;
 border:1px solid rgba(255,255,255,.6);border-radius:6px;padding:3px 10px;font-size:13px;
 font-family:inherit;cursor:pointer;">刷新</button>
-<a href="%s" style="color:#fff;text-decoration:none;font-size:13px;
-border:1px solid rgba(255,255,255,.6);border-radius:6px;padding:3px 10px;">%s</a>
+%s
 </span>
 </div>
-""" % (other, label)
+""" % btns
 
 
 # 旧版本自愈脚本：手机里缓存的那一页若与服务器版本不一致，自动拉最新一版。
@@ -104,6 +110,33 @@ setTimeout(tnCheck, 3000);
 setInterval(tnCheck, 300000);
 </script>
 """
+
+CACHE_META = ('<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">'
+              '<meta http-equiv="Pragma" content="no-cache">'
+              '<meta http-equiv="Expires" content="0">')
+
+
+def inject_chrome(html, build, active):
+    """给任意一页装上禁缓存 + 顶部红条 + 版本自愈脚本。
+
+    单期正文页也必须装：从往期列表点进某一期后，如果那一页没有导航，
+    用户就再也回不到最新一期了（踩过的坑）。
+    """
+    if "</head>" in html:
+        html = html.replace("</head>", CACHE_META + "</head>", 1)
+    nav = nav_bar(active, build)
+    m = re.search(r"<body[^>]*>", html)
+    if m:
+        html = html[:m.end()] + nav + html[m.end():]
+    else:
+        html = nav + html
+    js = SYNC_JS.replace("__BUILD__", build)
+    if "</body>" in html:
+        html = html.replace("</body>", js + "</body>", 1)
+    else:
+        html += js
+    return html
+
 
 # 放在正文最前面，只有「今天这期还没生成」时才有内容
 BANNER = """
@@ -242,7 +275,12 @@ def main():
 
     n = 0
     for d, fn in rows:
-        shutil.copy2(os.path.join(SRC, fn), os.path.join(OUT, fn))
+        with open(os.path.join(SRC, fn), encoding="utf-8") as f:
+            page = f.read()
+        # 往期正文页也要有导航，否则点进去就出不来
+        page = inject_chrome(page, BUILD_ID, "report")
+        with open(os.path.join(OUT, fn), "w", encoding="utf-8") as f:
+            f.write(page)
         n += 1
 
     # 图标放在仓库根目录，每次构建都同步到 docs/（主屏「添加到主屏幕」用）
