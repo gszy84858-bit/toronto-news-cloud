@@ -73,7 +73,9 @@ jobs:
             echo "内容无变化，跳过提交"
           else
             git commit -m "早报自动更新 $(TZ=America/Toronto date +%Y-%m-%d)"
-            git push
+            # 排队的多个运行会互相抢提交，先变基再推，失败也不算整个流程失败
+            git pull --rebase origin main || true
+            git push || echo "::warning::本期内容已生成并部署到网页，仅归档提交未推上（下次运行会重试）"
           fi
 
       - name: 打包网页
