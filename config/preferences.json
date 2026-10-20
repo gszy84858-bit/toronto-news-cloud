@@ -1,0 +1,82 @@
+{
+  "version": "2.0-cloud",
+  "note": "云端版（GitHub Actions / 任意 Linux 主机）运行参数。output_dir 与 config_dir 由程序按仓库目录自动推导，此处不配置，避免依赖 ~/Documents。",
+
+  "count": 10,
+  "min_count": 5,
+  "max_count": 12,
+  "window_hours": 36,
+  "category_max": 3,
+  "require_local_marker": true,
+
+  "open_after_run": false,
+  "notify_after_run": false,
+  "make_html": true,
+  "keep_days": 90,
+
+  "phone": {
+    "icloud_enabled": false,
+    "note": "云端主机没有 iCloud，手机端改由 GitHub Pages 网页承载，故关闭镜像。"
+  },
+
+  "tier_weights": {
+    "1": 1.0,
+    "2": 0.86,
+    "3": 0.72
+  },
+
+  "category_boost": {
+    "商业经贸": 1.18,
+    "科技创业": 1.10,
+    "市政政治": 1.06,
+    "交通": 1.00,
+    "住房地产": 1.00,
+    "治安司法": 0.96,
+    "教育医疗": 0.96,
+    "生活服务": 0.90,
+    "文体活动": 0.84
+  },
+
+  "target_mix": {
+    "商业经贸": 3,
+    "市政政治": 2,
+    "交通": 1,
+    "住房地产": 1,
+    "科技创业": 2,
+    "治安司法": 1,
+    "生活服务": 1
+  },
+
+  "ai": {
+    "enabled": true,
+    "provider": "gemini",
+    "note": "云端中文转换通道。provider=gemini 走 Google 原生 REST（有免费额度）；若将来换成 DeepSeek / 硅基流动等，把 provider 改成 openai，并填 base_url 与 model 即可，代码无需改动。api_key 留空时自动读取环境变量 GEMINI_API_KEY（GitHub Secrets 注入），不要把密钥写进本文件。",
+    "base_url": "",
+    "api_key": "",
+    "model": "",
+    "batch_size": 5,
+    "timeout": 120,
+    "glossary": {
+      "GTA": "大多伦多地区",
+      "TTC": "多伦多公车局",
+      "MPP": "省议员",
+      "Premier": "省长",
+      "Bank of Canada": "加拿大央行",
+      "Queen's Park": "安省省议会",
+      "tariff": "关税",
+      "duties": "关税",
+      "ridership": "客流量",
+      "Scarborough": "士嘉堡",
+      "Series A": "A轮",
+      "Series B": "B轮",
+      "Series C": "C轮"
+    }
+  },
+
+  "translate": {
+    "enabled": true,
+    "note": "云端主机没有 macOS 设备端翻译，因此只保留 ai 通道。",
+    "engines_order": ["ai"],
+    "target": "zh-Hans"
+  }
+}

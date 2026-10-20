@@ -1,0 +1,226 @@
+{
+  "version": "1.0",
+  "note": "分类/性质判定关键词库。全部小写匹配。命中越靠前、关键词越具体，得分越高。可直接改动本文件调整判定结果，无需改代码。",
+
+  "categories": [
+    {
+      "label": "市政政治",
+      "keywords": ["city council", "councillor", "mayor", "mayoral", "olivia chow", "chow ", "city hall", "bylaw", "budget", "property tax", "tax freeze", "tax hike", "doug ford", "ford government", "premier", "queen's park", "mpp", "province", "provincial", "municipal", "election", "ballot", "candidate", "referendum", "ombudsman", "integrity commissioner", "committee vote", "council vote", "city staff"]
+    },
+    {
+      "label": "交通",
+      "keywords": ["ttc", "subway", "streetcar", "go train", "go transit", "metrolinx", "transit", "line 1", "line 2", "line 5", "line 6", "eglinton", "crosstown", "finch west", "ontario line", "scarborough", "gardiner", "dvp", "401", "427", "highway", "traffic", "congestion", "bike lane", "cycling", "cyclist", "road closure", "lane closure", "intersection", "pedestrian", "airport", "pearson", "billy bishop", "streetcar", "fare", "presto", "bus route", "commute"]
+    },
+    {
+      "label": "住房地产",
+      "keywords": ["housing", "home price", "house price", "rent", "rental", "landlord", "tenant", "vacancy", "condo", "condominium", "mortgage", "real estate", "development", "rezoning", "zoning", "building permit", "construction start", "tower", "affordable housing", "shelter", "homeless", "eviction", "housing market", "sales volume", "average price", "pre-construction"]
+    },
+    {
+      "label": "商业经贸",
+      "keywords": ["tariff", "trade", "export", "import", "customs", "cbsa", "supply chain", "retail", "retailer", "consumer", "spending", "sales", "revenue", "business", "company", "firm", "corporation", "ceo", "layoff", "job cuts", "hiring", "minimum wage", "inflation", "interest rate", "bank of canada", "loonie", "canadian dollar", "currency", "economy", "gdp", "statistics canada", "tax", "cra", "postal", "canada post", "strike", "chamber of commerce", "restaurant", "shop", "store", "chain", "bankrupt", "insolvency"]
+    },
+    {
+      "label": "科技创业",
+      "keywords": ["startup", "start-up", "venture", "seed round", "series a", "series b", "series c", "funding", "raises", "raised", "valuation", "unicorn", "investor", "vc", "accelerator", "incubator", "artificial intelligence", " ai ", "machine learning", "robot", "robotics", "biotech", "fintech", "saas", "platform", "app launch", "acquires", "acquisition", "ipo", "tech company", "software", "data centre", "data center", "semiconductor", "chip"]
+    },
+    {
+      "label": "治安司法",
+      "keywords": ["police", "toronto police", "tps", "opp", "rcmp", "siu", "shooting", "gunfire", "stabbing", "homicide", "murder", "manslaughter", "arrest", "arrested", "charged", "suspect", "robbery", "carjacking", "breaking and entering", "assault", "fraud", "court", "judge", "justice", "trial", "sentencing", "verdict", "appeal", "lawsuit", "inquest", "drug bust", "trafficking", "hate crime", "crime"]
+    },
+    {
+      "label": "教育医疗",
+      "keywords": ["school", "school board", "tdsb", "student", "teacher", "university", "college", "u of t", "university of toronto", "ryerson", "toronto metropolitan", "york university", "tuition", "curriculum", "hospital", "health", "patient", "doctor", "nurse", "er wait", "emergency room", "surgery", "vaccine", "public health", "medical officer", "opioid", "overdose", "mental health", "long-term care", "clinic", "pharmacy"]
+    },
+    {
+      "label": "生活服务",
+      "keywords": ["weather", "forecast", "storm", "snowfall", "heat warning", "cold warning", "temperature", "wind chill", "rainfall", "flood", "holiday", "thanksgiving", "statutory holiday", "municipal office", "closure", "closed", "operating hours", "service change", "garbage", "recycling", "green bin", "water main", "hydro", "power outage", "utilities", "waterfront", "park", "city service", "311"]
+    },
+    {
+      "label": "文体活动",
+      "keywords": ["festival", "concert", "exhibition", "museum", "gallery", "theatre", "theater", "performing arts", "film festival", "tiff", "nuit blanche", "caribana", "pride", "marathon", "hockey", "maple leafs", "blue jays", "raptors", "toronto fc", "argonauts", "sports", "playoff", "arena", "cn tower", "aquarium", "zoo", "cne", "fair", "parade", "celebrity", "restaurant opening"]
+    }
+  ],
+
+  "natures": [
+    {
+      "label": "突发",
+      "keywords": ["breaking", "just in", "developing story", "emergency", "evacuated", "evacuation", "explosion", "fire breaks out", "major fire", "crash", "collision", "dead", "killed", "dies", "died", "injured", "critical condition", "missing person", "amber alert", "lockdown", "shelter in place", "boil water", "collapse", "outage", "state of emergency", "blackout", "investigating", "investigation launched", "under investigation", "police investigating", "launches investigation", "launched an investigation", "opened an investigation", "opened a probe", "police probe", "sudden death", "fatally", "struck by", "taken to hospital"]
+    },
+    {
+      "label": "政策发布",
+      "keywords": ["announces", "announced", "unveils", "unveiled", "introduces", "introduced", "proposes", "proposed", "passes", "passed", "approves", "approved", "adopts", "signs into law", "legislation", "bill", "new rule", "new regulation", "policy", "bylaw", "official plan", "framework", "mandate", "ban", "bans", "banned", "tax credit", "rebate"]
+    },
+    {
+      "label": "政策执行预告",
+      "keywords": ["will begin", "will start", "starting", "to start", "set to", "effective", "takes effect", "beginning", "as of", "deadline", "due date", "next week", "next month", "later this month", "planned", "scheduled to", "is expected to take", "rolls out", "phase in", "phased in", "coming to"]
+    },
+    {
+      "label": "调查结论",
+      "keywords": ["report finds", "report found", "investigation finds", "investigation found", "investigation concludes", "inquiry", "auditor general", "watchdog", "siu concludes", "ruling", "judge rules", "court rules", "verdict", "no grounds", "cleared of", "found guilty", "charges laid", "recommendations", "review concludes", "autopsy"]
+    },
+    {
+      "label": "数据报告",
+      "keywords": ["report shows", "new data", "data shows", "figures show", "survey finds", "poll finds", "poll shows", "index", "statistics", "statistics canada", "per cent", "percent", "year over year", "month over month", "record high", "record low", "hits", "declines", "declined", "rises", "rose", "drops", "dropped", "grew", "growth", "analysis shows", "tracker"]
+    },
+    {
+      "label": "融资里程碑",
+      "keywords": ["raises", "raised", "secures", "closed a", "funding round", "seed round", "series a", "series b", "series c", "series d", "pre-seed", "valuation", "unicorn", "ipo", "goes public", "acquires", "acquisition", "merger", "buyout", "investment of", "led the round", "backed by", "closes"]
+    },
+    {
+      "label": "产品发布",
+      "keywords": ["launches", "launched", "debuts", "unveils", "introduces", "releases", "rolls out", "opens its doors", "first look", "now available", "goes live", "ships", "new version", "new app", "new service", "new line", "expansion", "expands to"]
+    },
+    {
+      "label": "进展更新",
+      "keywords": ["update", "latest on", "continues", "resumes", "second phase", "third phase", "progress", "on track", "delayed", "postponed", "further", "follows", "after", "returns to", "back on", "one year later", "six months later"]
+    },
+    {
+      "label": "深度报道",
+      "keywords": ["exclusive", "investigation", "inside", "why ", "how ", "explainer", "what you need to know", "analysis", "feature", "deep dive", "special report", "the truth about", "behind", "uncovered", "documents reveal", "emails show", "timeline", "profile"]
+    },
+    {
+      "label": "服务提示",
+      "keywords": ["closure", "closed this", "closed for", "detour", "service change", "schedule change", "holiday hours", "operating hours", "what's open", "what's closed", "road work", "maintenance", "expect delays", "travel advisory", "weather warning", "forecast", "how to", "where to", "tips to", "avoid"]
+    },
+    {
+      "label": "舆论争议",
+      "keywords": ["backlash", "criticism", "criticized", "slammed", "slams", "sparks debate", "sparks outrage", "controversy", "controversial", "dispute", "divided", "pushback", "defends", "accused", "outrage", "row over", "under fire", "petition", "protest", "demonstration", "rally", "opposition"]
+    }
+  ],
+
+  "toronto_keywords": [
+    "toronto", "gta", "greater toronto", "city of toronto", "downtown toronto",
+    "scarborough", "etobicoke", "north york", "east york", "york region",
+    "regent park", "parkdale", "leslieville", "riverdale", "roncesvalles",
+    "kensington market", "the annex", "liberty village", "moss park",
+    "harbourfront", "distillery district", "danforth", "junction",
+    "yonge", "bloor", "spadina", "dundas", "eglinton", "bathurst", "dufferin",
+    "lawrence avenue", "steeles", "sheppard", "jane and finch", "rexdale",
+    "don mills", "bayview", "kipling", "islington", "queensway", "the kingsway",
+    "weston", "mount dennis", "weston", "thistletown", "humber bay",
+    "mississauga", "brampton", "caledon", "vaughan", "markham", "richmond hill",
+    "aurora", "newmarket", "king city", "stouffville", "pickering", "ajax",
+    "whitby", "oshawa", "clarington", "uxbridge", "oakville", "burlington",
+    "milton", "halton hills", "georgetown", "bolton", "peel region",
+    "durham region", "halton region", "york regional",
+    "ttc", "metrolinx", "go transit", "pearson", "billy bishop", "toronto island",
+    "city hall", "toronto city council", "olivia chow", "tdsb", "tcdsb",
+    "toronto police", "university of toronto", "u of t", "toronto metropolitan",
+    "york university", "seneca", "humber college", "george brown", "centennial college",
+    "cn tower", "exhibition place", "canada's wonderland", "rogers centre",
+    "scotiabank arena", "gardiner", "dvp", "don valley", "highway 401", "hwy 401",
+    "highway 427", "highway 404", "highway 407", "qew", "401", "427", "404", "407",
+    "maple leafs", "blue jays", "raptors", "toronto fc", "argonauts",
+    "queen's park", "ford government", "doug ford", "ontario government",
+    "premier of ontario", "ontario legislature", "ontario ministry", "province of ontario"
+  ],
+
+  "macro_keywords": [
+    "tariff", "tariffs", "trade war", "trade deal", "cusi", "cares act", "usmca", "cptpp", "duty", "duties", "countertariff", "export", "import", "customs", "cbsa", "border", "supply chain", "shipping", "container", "port", "freight", "logistics", "postal", "canada post", "strike", "inflation", "interest rate", "bank of canada", "gdp", "recession", "unemployment rate", "jobless", "statistics canada", "federal budget", "fiscal", "deficit", "carbon tax", "gst", "hst", "corporate tax", "capital gains", "minimum wage", "immigration", "work permit", "housing market", "mortgage rate", "loonie", "canadian dollar", "exchange rate", "retail sales", "consumer price", "manufacturing", "auto sector", "energy", "oil price", "small business"
+  ],
+
+  "importance_keywords": {
+    "tariff": 6,
+    "tariffs": 6,
+    "trade war": 6,
+    "ban": 5,
+    "banned": 5,
+    "prohibited": 5,
+    "recession": 6,
+    "interest rate": 5,
+    "bank of canada": 5,
+    "inflation": 4,
+    "budget": 5,
+    "property tax": 5,
+    "tax": 4,
+    "rent": 4,
+    "housing": 4,
+    "mortgage": 5,
+    "layoff": 5,
+    "job cuts": 5,
+    "strike": 4,
+    "shutdown": 5,
+    "emergency": 5,
+    "state of emergency": 7,
+    "evacuation": 5,
+    "council vote": 4,
+    "approved": 3,
+    "announced": 3,
+    "billion": 4,
+    "million": 2,
+    "unicorn": 4,
+    "ipo": 5,
+    "acquisition": 4,
+    "merger": 4,
+    "federal": 3,
+    "provincial": 3,
+    "supreme court": 5,
+    "class action": 4,
+    "mel_last": 0
+  },
+
+  "business_topics": [
+    {
+      "label": "关税与贸易壁垒",
+      "keywords": ["tariff", "tariffs", "trade war", "countertariff", "counter-tariff", "duty", "duties", "antidumping", "anti-dumping", "safeguard", "section 232", "section 301", "usmca", "cptpp", "world trade", "wto"],
+      "advice": "关税直接推高进口成本与终端定价。先确认你主销品类的 HTS 编码是否在清单内，再决定是提前备货、改走第三国中转，还是把涨幅传导给售价。别等到报关时才发现利润被吃掉。"
+    },
+    {
+      "label": "禁售与合规",
+      "keywords": ["ban", "banned", "prohibited", "restricted", "import ban", "compliance", "recall", "safety standard", "certification", "labeling", "labelling", "packaging rule", "consumer product safety", "health canada approval", "ce mark", "ul certification"],
+      "advice": "禁售与合规要求属于硬门槛，一旦生效Listing会被平台直接下架。查清生效日期，提前核对产品标签、认证与说明书是否达标，必要时先下架整改再补货。"
+    },
+    {
+      "label": "加元汇率",
+      "keywords": ["loonie", "canadian dollar", "currency", "exchange rate", "forex", "weaker dollar", "stronger dollar"],
+      "advice": "加元走弱时，同样的人民币成本换回加元更少，等于利润被压缩；反之则利好。做定价时把汇率波动预留 3–5% 的缓冲，别按当日汇率倒推售价。"
+    },
+    {
+      "label": "消费与零售数据",
+      "keywords": ["retail sales", "consumer spending", "consumer price", "cpi", "holiday spending", "e-commerce", "online shopping", "foot traffic", "shopper", "buyer behaviour", "buyer behavior", "confidence index"],
+      "advice": "消费数据是你判断备货量的直接依据。留意品类级的分项数字（而非总量）——总量增长但你的品类下滑，说明问题出在选品而不是大盘。"
+    },
+    {
+      "label": "房地产与租金",
+      "keywords": ["housing market", "home price", "house price", "rent", "rental", "vacancy rate", "mortgage rate", "real estate", "condo market", "average price"],
+      "advice": "房市与租金影响本地家庭的可支配收入，进而影响家居、家装、日用类目的客单价。租金上涨通常先挤压低价日用消费，中高客单反而更抗压。"
+    },
+    {
+      "label": "物流与航运",
+      "keywords": ["canada post", "postal", "strike", "shipping", "freight", "container", "port", "vancouver port", "montreal port", "customs clearance", "border delay", "courier", "purolator", "ups", "fedex", "dhl", "last mile", "warehouse"],
+      "advice": "物流中断会直接拖长妥投时效、拉高客诉率。旺季前把主发渠道和备用渠道都留好，尤其是小包类专线——罢工期间平台对时效的考核不会网开一面。"
+    },
+    {
+      "label": "税制与征管",
+      "keywords": ["gst", "hst", "sales tax", "tax", "taxation", "cra", "canada revenue", "corporate tax", "capital gains", "tax credit", "rebate", "duty free", "de minimis", "low value shipment", "import tax"],
+      "advice": "税制与免税额度直接影响低客单价商品的竞争力。若低值包裹免税门槛被调整，低价直邮模式的首当其冲，需要提前测算走海外仓是否更划算。"
+    },
+    {
+      "label": "中小企业与融资",
+      "keywords": ["small business", "sme", "relief", "subsidy", "grant", "loan program", "bailout", "funding program", "ceba", "support program", "eligibility"],
+      "advice": "政府纾困与补贴通常带营收或规模门槛，跨境卖家常因主体在境外而被排除。仔细读资格条款，若不符合，及早把重心放回渠道和成本的自身优化。"
+    },
+    {
+      "label": "用工与人工成本",
+      "keywords": ["minimum wage", "wage increase", "labour", "labor", "union", "hiring", "job cuts", "layoff", "employment", "work permit", "temporary foreign worker"],
+      "advice": "人工成本上涨会传导到本地仓配、代运营和客服报价，间接抬高你的履约成本。签长约时把年度调价条款写清楚，别被单方面通知涨价。"
+    },
+    {
+      "label": "平台与电商政策",
+      "keywords": ["amazon", "shopify", "ebay", "etsy", "walmart marketplace", "marketplace", "platform fee", "seller", "third-party seller", "e-commerce rule", "online marketplace"],
+      "advice": "平台政策变动会立刻影响费用结构与被下架风险。收到卖家中心通知后当天读完，尤其是费用、退货和合规三块——缓冲期往往只有几周。"
+    }
+  ],
+
+  "drop_patterns": [
+    "horoscope", "zodiac sign", "star signs", "crossword", "sudoku",
+    "recipe of the day", "today's deal", "photos of the day", "weather photo",
+    "letters to the editor", "opinion: ", "column: ", "obituary", "birthday",
+    "sports recap", "game recap", "highlights: ", "watch: ", "listen: ",
+    "podcast: ", "newsletter: ",
+    "gropes", "groped", "nude photo", "topless", "sex tape", "onlyfans",
+    "porn star", "mistress", "swinger", "naked man", "naked woman",
+    "reality tv", "celebrity gossip", "royal family", "kardashian",
+    "lottery winner", "world's largest", "viral video", "tiktok star"
+  ]
+}

@@ -1,0 +1,86 @@
+name: 多伦多新闻早报 · 每日自动生成
+
+# 这个工作流跑在 GitHub 的服务器上，跟你的电脑有没有开机完全无关。
+# 每天自动生成一期早报，并发布成一个固定网址，任何手机任何网络都能打开。
+
+on:
+  schedule:
+    # GitHub 的定时器用 UTC。13:45 UTC = 多伦多上午 9:45（夏令时 EDT）
+    # 冬令时（EST, UTC-5）会变成上午 8:45 —— 两种情况都在 10 点前，符合需求。
+    - cron: "45 13 * * *"
+  workflow_dispatch:            # 也支持手动点一下立刻生成
+    inputs:
+      force:
+        description: 覆盖今天已生成的早报
+        type: boolean
+        default: true
+
+permissions:
+  contents: write               # 提交当日早报，保留往期
+  pages: write                  # 发布网页
+  id-token: write               # GitHub Pages 部署需要
+
+concurrency:
+  group: toronto-news-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      TZ: America/Toronto
+      TORONTO_TZ: America/Toronto
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 准备 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 官方 Pages 流程的前置步骤（读取/初始化 Pages 配置）
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+
+      # 密钥缺失时立刻失败并给出明确指引，而不是悄悄产出一份英文早报。
+      - name: 检查 Gemini 密钥
+        run: |
+          if [ -z "${GEMINI_API_KEY}" ]; then
+            echo "::error title=缺少密钥::还没配置 GEMINI_API_KEY。请到仓库 Settings → Secrets and variables → Actions → New repository secret，名称填 GEMINI_API_KEY，值填你在 Google AI Studio 拿到的 key。"
+            exit 1
+          fi
+          echo "密钥已就绪（长度 ${#GEMINI_API_KEY}）"
+
+      - name: 抓取并生成早报（Gemini 生成中文）
+        run: python3 generate.py --force --quiet --stats
+
+      - name: 构建手机网页
+        run: python3 build_site.py
+
+      - name: 保存本期（保留往期，供下次去重与归档）
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A output docs
+          if git diff --cached --quiet; then
+            echo "内容无变化，跳过提交"
+          else
+            git commit -m "早报自动更新 $(TZ=America/Toronto date +%Y-%m-%d)"
+            git push
+          fi
+
+      - name: 打包网页
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: 发布到公网
+        id: deploy
+        uses: actions/deploy-pages@v4

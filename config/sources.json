@@ -1,0 +1,175 @@
+{
+  "version": "1.1",
+  "last_verified": "2026-10-12",
+  "verify_note": "本清单中全部地址均已实测返回有效 RSS。打包时若某个源改版失效，程序会自动跳过该源并在 --stats 里标 ERR，不影响其他源。",
+  "field_note": "local=true 表示该媒体本身以多伦多/GTA 为报道范围，条目默认视为本地相关；macro_ok=true 表示全国性媒体，只有命中宏观关键词（关税/税制/利率/统计等）才收录。tier 数字越小权重越高。",
+  "sources": [
+    {
+      "id": "cbc-toronto",
+      "name": "CBC Toronto",
+      "url": "https://www.cbc.ca/webfeed/rss/rss-canada-toronto",
+      "tier": 1,
+      "local": true,
+      "macro_ok": false,
+      "enabled": true,
+      "strict": false
+    },
+    {
+      "id": "citynews",
+      "name": "CityNews Toronto",
+      "url": "https://toronto.citynews.ca/feed/",
+      "tier": 1,
+      "local": true,
+      "macro_ok": false,
+      "enabled": true,
+      "strict": false
+    },
+    {
+      "id": "global-toronto",
+      "name": "Global News Toronto",
+      "url": "https://globalnews.ca/toronto/feed/",
+      "tier": 1,
+      "local": true,
+      "macro_ok": false,
+      "enabled": true,
+      "strict": false
+    },
+    {
+      "id": "toronto-star",
+      "name": "Toronto Star",
+      "url": "https://www.thestar.com/search/?f=rss&t=article&c=news&l=25",
+      "tier": 1,
+      "local": true,
+      "macro_ok": false,
+      "enabled": true,
+      "strict": true
+    },
+    {
+      "id": "toronto-ca",
+      "name": "Toronto City Hall",
+      "url": "https://www.toronto.ca/news/feed/",
+      "tier": 1,
+      "local": true,
+      "macro_ok": false,
+      "enabled": true,
+      "strict": false
+    },
+    {
+      "id": "financial-post",
+      "name": "Financial Post",
+      "url": "https://financialpost.com/feed",
+      "tier": 2,
+      "local": false,
+      "macro_ok": true,
+      "enabled": true,
+      "strict": false
+    },
+    {
+      "id": "betakit",
+      "name": "BetaKit",
+      "url": "https://betakit.com/feed/",
+      "tier": 2,
+      "local": false,
+      "macro_ok": true,
+      "enabled": true,
+      "strict": false
+    },
+    {
+      "id": "cbc-business",
+      "name": "CBC Business",
+      "url": "https://www.cbc.ca/webfeed/rss/rss-business",
+      "tier": 2,
+      "local": false,
+      "macro_ok": true,
+      "enabled": true,
+      "strict": false
+    },
+    {
+      "id": "urbantoronto",
+      "name": "UrbanToronto",
+      "url": "https://urbantoronto.ca/feed",
+      "tier": 2,
+      "local": true,
+      "macro_ok": false,
+      "enabled": true,
+      "strict": false
+    },
+    {
+      "id": "now-toronto",
+      "name": "Now Toronto",
+      "url": "https://nowtoronto.com/feed/",
+      "tier": 2,
+      "local": true,
+      "macro_ok": false,
+      "enabled": true,
+      "strict": false
+    },
+    {
+      "id": "the-local",
+      "name": "The Local",
+      "url": "https://thelocal.to/feed/",
+      "tier": 2,
+      "local": true,
+      "macro_ok": false,
+      "enabled": true,
+      "strict": false
+    },
+    {
+      "id": "toronto-sun",
+      "name": "Toronto Sun",
+      "url": "https://torontosun.com/feed",
+      "tier": 3,
+      "local": true,
+      "macro_ok": false,
+      "enabled": true,
+      "strict": true
+    },
+    {
+      "id": "insauga",
+      "name": "InSauga (GTA 西)",
+      "url": "https://www.insauga.com/feed/",
+      "tier": 3,
+      "local": true,
+      "macro_ok": false,
+      "enabled": true,
+      "strict": false
+    },
+    {
+      "id": "cbc-canada",
+      "name": "CBC Canada",
+      "url": "https://www.cbc.ca/webfeed/rss/rss-canada",
+      "tier": 3,
+      "local": false,
+      "macro_ok": true,
+      "enabled": true,
+      "strict": false
+    }
+  ],
+  "disabled": [
+    {
+      "name": "CTV News Toronto",
+      "reason": "所有已知 RSS 路径均返回 404，官方已下线"
+    },
+    {
+      "name": "CP24",
+      "reason": "/rss/ 与 /feed 均返回 404"
+    },
+    {
+      "name": "blogTO",
+      "reason": "/feed/、/rss、/rss.xml 均返回 404"
+    },
+    {
+      "name": "Toronto Life",
+      "reason": "返回 403，Cloudflare 反爬拦截"
+    },
+    {
+      "name": "The Trillium",
+      "reason": "返回 403，反爬拦截"
+    },
+    {
+      "name": "Toronto Storeys",
+      "reason": "返回 114 字节空响应"
+    }
+  ],
+  "strict_note": "strict=true 表示该源会混入通讯社转载或八卦内容，条目必须命中本地关键词才会收录。"
+}
