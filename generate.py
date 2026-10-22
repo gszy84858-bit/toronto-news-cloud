@@ -339,6 +339,116 @@ def http_get(url, timeout=15):
     return raw
 
 
+# ----------------------------------------------------------------------------
+# 配图：优先用原文自己的图（RSS 媒体字段 → 正文 <img> → 原文页 og:image）
+# ----------------------------------------------------------------------------
+
+_IMG_TAGS = {"enclosure", "content", "thumbnail", "image"}
+_OG_PATTERNS = (
+    # 注意：不少站点（如 Financial Post）的属性值是**不带引号**的，
+    # 所以引号必须写成可选，否则整页 og:image 都会被漏掉。
+    r'<meta[^>]+property=["\']?og:image(?::url)?["\']?[^>]+content=["\']?([^"\'>\s]+)',
+    r'<meta[^>]+content=["\']?([^"\'>\s]+)["\']?[^>]+property=["\']?og:image',
+    r'<meta[^>]+name=["\']?twitter:image(?::src)?["\']?[^>]+content=["\']?([^"\'>\s]+)',
+    r'<meta[^>]+content=["\']?([^"\'>\s]+)["\']?[^>]+name=["\']?twitter:image',
+)
+_BAD_IMG_HINTS = ("1x1", "pixel.gif", "spacer.", "feedburner", "/blank.", "transparent.")
+
+
+def normalize_img(url):
+    """统一成 https 图片地址；不可用的直接丢掉。
+
+    GitHub Pages 是 https，混用 http 会被浏览器按混合内容拦掉，所以一律升级到 https。
+    """
+    u = html_mod.unescape((url or "").strip()).strip("\"'")
+    if not u or u.startswith("data:"):
+        return ""
+    if u.startswith("//"):
+        u = "https:" + u
+    if u.startswith("http://"):
+        u = "https://" + u[7:]
+    if not u.startswith("https://"):
+        return ""
+    low = u.lower()
+    if low.endswith(".svg") or any(h in low for h in _BAD_IMG_HINTS):
+        return ""
+    return u
+
+
+def extract_feed_image(el, blob=""):
+    """从 RSS/Atom 条目里挖一张图。
+
+    优先级：media:content / media:thumbnail（同一条里挑尺寸最大的）→ enclosure → 正文 <img>。
+    很多媒体源都会带 media:content，这一步能覆盖大半，不必去抓原文页。
+    """
+    best, best_w = "", -1
+    for node in el.iter():
+        name = strip_ns(node.tag).lower()
+        if name not in _IMG_TAGS:
+            continue
+        typ = (node.get("type") or "").lower()
+        if name == "enclosure" and typ and not typ.startswith("image"):
+            continue
+        if name == "content" and (node.get("medium") or "").lower() not in ("", "image"):
+            continue
+        u = (node.get("url") or node.get("href") or "").strip()
+        if not u:
+            for c in node.iter():
+                if strip_ns(c.tag).lower() == "url":
+                    u = (c.text or "").strip()
+                    break
+        u = normalize_img(u)
+        if not u:
+            continue
+        try:
+            w = int(node.get("width") or 0)
+        except Exception:
+            w = 0
+        if w >= best_w:
+            best, best_w = u, w
+    if not best and blob:
+        m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', blob, re.I)
+        if m:
+            best = normalize_img(m.group(1))
+    return best
+
+
+def fetch_og_image(url, timeout=10):
+    """兜底：抓原文页，取 og:image / twitter:image。抓不到就返回空，不抛错。"""
+    try:
+        raw = http_get(url, timeout=timeout)
+        head = raw[:400000].decode("utf-8", "replace")
+        for pat in _OG_PATTERNS:
+            m = re.search(pat, head, re.I)
+            if m:
+                u = normalize_img(m.group(1))
+                if u:
+                    return u
+    except Exception:
+        pass
+    return ""
+
+
+def fill_missing_images(items, quiet=False, workers=6):
+    """只对「最终入选但还没图」的条目去抓原文页，避免无谓请求。"""
+    need = [it for it in items if not it.get("image")]
+    if not need:
+        return 0
+    got = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+        futs = {ex.submit(fetch_og_image, it["link"]): it for it in need}
+        for fu in concurrent.futures.as_completed(futs, timeout=60):
+            it = futs[fu]
+            try:
+                u = fu.result()
+            except Exception:
+                u = ""
+            if u:
+                it["image"] = u
+                got += 1
+    return got
+
+
 def parse_feed(raw):
     """兼容 RSS 2.0 / Atom，返回原始条目字典列表。"""
     if not raw:
@@ -372,13 +482,15 @@ def parse_feed(raw):
         if not link:
             link = deep_text(el, {"guid", "id"}).strip()
 
+        blob = deep_text(el, {"description", "summary", "content",
+                              "encoded", "subtitle", "content:encoded"})
         items.append({
             "title": deep_text(el, {"title"}),
             "link": link,
-            "summary": deep_text(el, {"description", "summary", "content",
-                                      "encoded", "subtitle", "content:encoded"}),
+            "summary": blob,
             "date": deep_text(el, {"pubdate", "published", "updated", "date",
                                    "dc:date", "issued", "modified"}),
+            "image": extract_feed_image(el, blob),
         })
     return items
 
@@ -563,6 +675,7 @@ def build_items(fetches, prefs, rules, now, quiet=False):
                 continue
             raw_items.append({
                 "title": title, "link": link, "summary": summary,
+                "image": it.get("image", ""),
                 "dt": dt_local, "spec": f["spec"],
                 "source": f["name"], "tier": int(f["spec"].get("tier", 3)),
             })
@@ -1079,6 +1192,9 @@ def render_md(items, now, window_hours, logs, dropped, prefs, ai_note=""):
     for i, it in enumerate(items, 1):
         L.append("## %d. %s" % (i, it["title"]))
         L.append("")
+        if it.get("image"):
+            L.append("![配图](%s)" % it["image"])
+            L.append("")
         if it.get("zh_title"):
             L.append("**%s**" % it["zh_title"])
             L.append("")
@@ -1111,6 +1227,8 @@ def render_md(items, now, window_hours, logs, dropped, prefs, ai_note=""):
     L.append("| 维度 | 分布 |")
     L.append("|---|---|")
     L.append("| 条数 | %d 条 |" % len(items))
+    L.append("| 配图 | %d/%d 条 |" % (
+        sum(1 for it in items if it.get("image")), len(items)))
     L.append("| 分类分布 | %s |" % "、".join(
         "%s %d" % (k, v) for k, v in sorted(cat_dist.items(), key=lambda x: -x[1])))
     L.append("| 性质分布 | %s |" % "、".join(
@@ -1191,6 +1309,10 @@ def esc(s):
     return html_mod.escape(str(s or ""), quote=True)
 
 
+IMG_COVER_STYLE = ("display:block;width:100%;aspect-ratio:16/9;object-fit:cover;"
+                   "border-radius:10px;margin:0 0 14px;background:#ecebe7")
+
+
 def render_html(md_items, items, now, window_hours, dropped, ai_note=""):
     d = now.strftime("%Y-%m-%d")
     wd = WEEKDAY_CN[now.weekday()]
@@ -1216,6 +1338,13 @@ def render_html(md_items, items, now, window_hours, dropped, ai_note=""):
 
     for i, it in enumerate(items, 1):
         P.append('<div class="card">')
+        # 配图：原文自己的图；点击可跳原文，加载失败自动隐藏，绝不留破图
+        if it.get("image"):
+            P.append('<a href="%s" target="_blank" rel="noopener" style="display:block">'
+                     '<img class="cover" src="%s" alt="" loading="lazy" decoding="async" '
+                     'referrerpolicy="no-referrer" style="%s" '
+                     "onerror=\"this.style.display='none'\"></a>"
+                     % (esc(it["link"]), esc(it["image"]), IMG_COVER_STYLE))
         P.append('<h2>%d. %s</h2>' % (i, esc(it["title"])))
         if it.get("zh_title"):
             P.append('<p class="zh">%s</p>' % esc(it["zh_title"]))
@@ -1245,6 +1374,8 @@ def render_html(md_items, items, now, window_hours, dropped, ai_note=""):
         nat_dist[it["nature"]] = nat_dist.get(it["nature"], 0) + 1
     P.append('<div class="stats"><h2>本期统计</h2><table>')
     P.append('<tr><td>条数</td><td>%d 条</td></tr>' % len(items))
+    P.append('<tr><td>配图</td><td>%d/%d 条</td></tr>' % (
+        sum(1 for it in items if it.get("image")), len(items)))
     P.append('<tr><td>分类分布</td><td>%s</td></tr>' % esc("、".join(
         "%s %d" % (k, v) for k, v in sorted(cat_dist.items(), key=lambda x: -x[1]))))
     P.append('<tr><td>性质分布</td><td>%s</td></tr>' % esc("、".join(
@@ -1425,6 +1556,12 @@ def main(argv=None):
         picked, ai_note = enrich_items(picked, prefs, quiet)
         if ai_note and not quiet:
             log("  · 中文转换：%s" % ai_note)
+
+    # 配图：RSS 里没带的，去原文页抓 og:image（只抓入选的这几条）
+    if picked:
+        n_fb = fill_missing_images(picked, quiet)
+        n_has = sum(1 for it in picked if it.get("image"))
+        log("  · 配图 %d/%d 条（其中 %d 条取自原文页）" % (n_has, len(picked), n_fb))
 
     dropped = []
     if n_far:

@@ -203,9 +203,16 @@ def build_index(rows):
 
     # 禁缓存，保证主屏图标每次都是新的
     if "</head>" in html:
+        # 顺手把首条配图当作分享缩略图（微信/推特转发时显示）
+        og = ""
+        m_img = re.search(r'class="cover" src="([^"]+)"', html)
+        if m_img:
+            og = ('<meta property="og:image" content="%s">'
+                  '<meta name="twitter:card" content="summary_large_image">'
+                  % esc(m_img.group(1)))
         html = html.replace(
             "</head>",
-            '<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">'
+            og + '<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">'
             '<meta http-equiv="Pragma" content="no-cache">'
             '<meta http-equiv="Expires" content="0"></head>', 1)
 
