@@ -813,7 +813,10 @@ GEMINI_ENDPOINT = ("https://generativelanguage.googleapis.com/v1beta/models/"
                    "{model}:generateContent")
 
 # Google 会不定期调整免费模型名，这里按顺序试，命中即用。
-GEMINI_MODEL_FALLBACKS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+# 2026-06 起 gemini-2.0-flash 的免费端点已关停；新项目免费额度集中在 3.x Flash。
+# 也可在仓库 Secrets 里加 GEMINI_MODEL 覆盖（无需改代码）。
+GEMINI_MODEL_FALLBACKS = ["gemini-3.8-flash", "gemini-3.5-flash",
+                          "gemini-flash-latest", "gemini-2.5-flash"]
 
 
 def _ai_prompt(items, glossary=None):
@@ -866,9 +869,10 @@ def _strip_json_fence(s):
 
 
 def _gemini_ask(chunk, glossary, key, order, timeout):
-    """向 Gemini 发一批，返回结果数组（失败返回 None）。
+    """向 Gemini 发一批，返回 (结果数组, 错误说明)。
 
     依次尝试候选模型；429/5xx 退避重试，400/404（模型名失效）直接换下一个模型。
+    失败时把「哪个模型+什么错」带出去，日志里能一眼看出是被限流还是模型名失效。
     """
     payload = {
         "contents": [{"role": "user",
@@ -880,6 +884,7 @@ def _gemini_ask(chunk, glossary, key, order, timeout):
         },
     }
     data_raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    last = ""
     for model in order:
         url = GEMINI_ENDPOINT.format(model=model)
         for attempt in range(3):
@@ -896,18 +901,25 @@ def _gemini_ask(chunk, glossary, key, order, timeout):
                     raise ValueError("模型未返回候选内容")
                 parts = (cands[0].get("content") or {}).get("parts") or []
                 text = "".join(p.get("text", "") for p in parts)
-                return json.loads(_strip_json_fence(text))
+                return json.loads(_strip_json_fence(text)), ""
             except urllib.error.HTTPError as e:
+                body = ""
+                try:
+                    body = e.read().decode("utf-8", "replace")[:160]
+                except Exception:
+                    pass
+                last = "%s → HTTP %s %s" % (model, e.code, body.strip())
                 if e.code in (429, 500, 502, 503, 504):
                     time.sleep(2.0 * (attempt + 1))   # 限流/瞬时故障 → 退避重试
                     continue
                 break                                 # 400/404 等 → 换下一个模型
-            except Exception:
+            except Exception as e:
+                last = "%s → %s" % (model, type(e).__name__)
                 if attempt < 2:
                     time.sleep(1.5)
                     continue
                 break
-    return None
+    return None, last
 
 
 def ai_enrich_gemini(items, ai, quiet=False):
@@ -922,16 +934,20 @@ def ai_enrich_gemini(items, ai, quiet=False):
     if not key:
         return items, "未配置 Gemini API Key，已回退"
 
-    models = ([ai["model"]] if ai.get("model") else []) + GEMINI_MODEL_FALLBACKS
+    # 优先用 Secrets 里的 GEMINI_MODEL（换模型不必改代码），再退回内置清单
+    override = (ai.get("model") or os.environ.get("GEMINI_MODEL") or "").strip()
+    models = ([override] if override else []) + GEMINI_MODEL_FALLBACKS
     seen, order = set(), []
     for m in models:
         if m and m not in seen:
             seen.add(m)
             order.append(m)
+    log("  · Gemini 模型尝试顺序：%s" % " → ".join(order))
 
     batch = max(1, int(ai.get("batch_size", 5)))
     timeout = float(ai.get("timeout", 120))
     glossary = ai.get("glossary")
+    errs = []
 
     def apply_rows(chunk, rows):
         # 大模型这一批成功了：先清掉规则引擎给的经营提示，避免张冠李戴
@@ -943,17 +959,21 @@ def ai_enrich_gemini(items, ai, quiet=False):
 
     for start in range(0, len(items), batch):
         chunk = items[start:start + batch]
-        got = _gemini_ask(chunk, glossary, key, order, timeout)
+        got, err = _gemini_ask(chunk, glossary, key, order, timeout)
         if got is not None:
             apply_rows(chunk, got)
+        elif err:
+            errs.append(err)
 
     # 补跑：只对还没中文的条目逐条重发
     missing = [i for i, it in enumerate(items) if not it.get("zh_summary")]
     if missing and len(missing) < len(items):
         for i in missing:
-            got = _gemini_ask([items[i]], glossary, key, order, timeout)
+            got, err = _gemini_ask([items[i]], glossary, key, order, timeout)
             if got is not None:
                 apply_rows([items[i]], got)
+            elif err:
+                errs.append(err)
             time.sleep(0.5)          # 免费额度有限，别打太急
 
     ok_n = sum(1 for it in items if it.get("zh_summary"))
@@ -962,7 +982,9 @@ def ai_enrich_gemini(items, ai, quiet=False):
     if ok_n:
         return items, "Gemini 已生成 %d/%d 条中文（%d 条未成功，保留英文原文）" % (
             ok_n, len(items), len(items) - ok_n)
-    return items, "Gemini 调用失败，已回退（本期保留英文原文）"
+    reason = errs[-1] if errs else "未知错误"
+    log("  ✗ Gemini 失败原因：%s" % reason)
+    return items, "Gemini 调用失败（%s）" % reason
 
 
 def ai_enrich_openai(items, ai, quiet=False):
