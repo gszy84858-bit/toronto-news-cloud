@@ -54,15 +54,18 @@ BUILD_ID = str(int(time.time()))
 
 
 def nav_bar(active, build):
-    """顶部红条。首页「往期」；往期列表页「回最新」；
-    单期正文页**两个都给**——否则点进某一期往期就再也出不来了。"""
+    """顶部红条。三页都要能互相走通（单期正文页尤其不能是死路）。"""
+    v = "?v=%s" % build
     if active == "index":
-        links = [("list.html?v=%s" % build, "往期")]
+        links = [("search.html" + v, "搜索"), ("list.html" + v, "往期")]
     elif active == "list":
-        links = [("index.html?v=%s" % build, "回最新")]
+        links = [("search.html" + v, "搜索"), ("index.html" + v, "回最新")]
+    elif active == "search":
+        links = [("index.html" + v, "回最新"), ("list.html" + v, "往期")]
     else:
-        links = [("index.html?v=%s" % build, "回最新"),
-                 ("list.html?v=%s" % build, "往期")]
+        links = [("search.html" + v, "搜索"),
+                 ("index.html" + v, "回最新"),
+                 ("list.html" + v, "往期")]
     btns = "".join('<a href="%s" style="color:#fff;text-decoration:none;font-size:13px;'
                    'border:1px solid rgba(255,255,255,.6);border-radius:6px;'
                    'padding:3px 10px;">%s</a>' % (h, t) for h, t in links)
@@ -290,6 +293,143 @@ __JS__
                 .replace("__JS__", SYNC_JS.replace("__BUILD__", BUILD_ID)))
 
 
+def _txt(s):
+    s = re.sub(r"<[^>]+>", "", s or "")
+    return html_mod.unescape(s).strip()
+
+
+def collect_search(rows):
+    """把每期正文里的条目抽成可搜索的索引（纯静态，无需后端）。"""
+    out = []
+    for d, fn in rows:
+        try:
+            with open(os.path.join(SRC, fn), encoding="utf-8") as f:
+                page = f.read()
+        except Exception:
+            continue
+        for card in page.split('<div class="card"')[1:]:
+            m_t = re.search(r"<h2[^>]*>(.*?)</h2>", card, re.S)
+            if not m_t:
+                continue
+            title = _txt(re.sub(r"^\s*\d+\.\s*", "", m_t.group(1)))
+            m_z = re.search(r'<p class="zh">(.*?)</p>', card, re.S)
+            m_c = re.search(r"分类 <b>(.*?)</b>", card, re.S)
+            m_n = re.search(r"性质 <b>(.*?)</b>", card, re.S)
+            m_s = re.search(r"来源 <b>(.*?)</b>", card, re.S)
+            m_u = re.search(r'class="src".*?href="([^"]+)"', card, re.S)
+            m_x = re.search(r'<p class="sum">(.*?)</p>', card, re.S)
+            m_i = re.search(r'class="cover" src="([^"]+)"', card)
+            out.append({
+                "d": d, "t": title,
+                "z": _txt(m_z.group(1)) if m_z else "",
+                "c": _txt(m_c.group(1)) if m_c else "",
+                "n": _txt(m_n.group(1)) if m_n else "",
+                "s": _txt(m_s.group(1)) if m_s else "",
+                "u": m_u.group(1) if m_u else "",
+                "x": (_txt(m_x.group(1))[:150] if m_x else ""),
+                "a": 1 if "⚡ 影响生意" in card else 0,
+                "i": m_i.group(1) if m_i else "",
+            })
+    return out
+
+
+def build_search(entries, build):
+    """站内搜索页：读 search.json，纯前端过滤，手机也能用。"""
+    page = """<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="多伦多早报">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<link rel="apple-touch-icon" href="app-icon.png">
+<title>搜索 · 多伦多新闻早报</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--fg:#1c1c1a;--mut:#6b6a66;--line:#e2e1dc;--acc:#b3261e}
+@media(prefers-color-scheme:dark){:root{--bg:#141413;--card:#1f1f1e;--fg:#eceae4;
+--mut:#a5a29b;--line:#33322f;--acc:#e2645c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+font:16px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif}
+.wrap{max-width:680px;margin:0 auto;padding:20px 16px 64px}
+input[type=search]{width:100%;padding:13px 15px;font-size:16px;border-radius:12px;
+border:1px solid var(--line);background:var(--card);color:var(--fg);outline:none}
+input[type=search]:focus{border-color:var(--acc)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 6px}
+.chip{font-size:13px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);
+background:var(--card);color:var(--mut);cursor:pointer;user-select:none}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.count{color:var(--mut);font-size:13px;margin:10px 0 14px}
+a.r{display:block;background:var(--card);border:1px solid var(--line);border-radius:14px;
+padding:14px 16px;margin-bottom:10px;text-decoration:none;color:var(--fg)}
+a.r.hot{border-left:4px solid var(--acc)}
+a.r .d{color:var(--mut);font-size:12px;margin-bottom:4px}
+a.r .t{font-weight:600;font-size:16px;line-height:1.45}
+a.r .z{color:var(--fg);font-size:14px;margin-top:4px}
+a.r .x{color:var(--mut);font-size:13px;margin-top:6px}
+.tag{display:inline-block;font-size:11.5px;color:var(--mut);border:1px solid var(--line);
+border-radius:6px;padding:1px 7px;margin:6px 6px 0 0}
+.empty{color:var(--mut);text-align:center;padding:40px 0}
+</style></head><body>__NAV__<div class="wrap">
+<input id="q" type="search" placeholder="搜标题、关键词、来源…（如 关税 / TTC / 罢工）"
+       autocomplete="off" autocorrect="off" spellcheck="false">
+<div class="chips" id="chips"></div>
+<div class="count" id="count">正在加载…</div>
+<div id="list"></div>
+</div>
+<script>
+var DATA=[], CAT="", Q="";
+function esc(s){return (s||"").replace(/[&<>"]/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function render(){
+  var q=Q.trim().toLowerCase();
+  var rows=DATA.filter(function(r){
+    if(CAT && r.c!==CAT) return false;
+    if(!q) return true;
+    return ((r.t+" "+(r.z||"")+" "+(r.x||"")+" "+r.c+" "+r.s).toLowerCase()).indexOf(q)>=0;
+  });
+  document.getElementById("count").textContent = rows.length + " 条结果"
+    + (CAT ? "（"+CAT+"）" : "");
+  var h = rows.slice(0,300).map(function(r){
+    return '<a class="r'+(r.a?' hot':'')+'" href="'+esc(r.u)+'" target="_blank" rel="noopener">'
+      + '<div class="d">'+esc(r.d)+(r.a?'　⚡ 影响生意':'')+'</div>'
+      + '<div class="t">'+esc(r.z||r.t)+'</div>'
+      + (r.z?'<div class="z">'+esc(r.t)+'</div>':'')
+      + (r.x?'<div class="x">'+esc(r.x)+'</div>':'')
+      + '<span class="tag">'+esc(r.c)+'</span><span class="tag">'+esc(r.n)+'</span>'
+      + '<span class="tag">'+esc(r.s)+'</span></a>';
+  }).join("");
+  document.getElementById("list").innerHTML = h || '<div class="empty">没有匹配的条目</div>';
+}
+function chips(){
+  var m={}; DATA.forEach(function(r){ m[r.c]=(m[r.c]||0)+1; });
+  var el=document.getElementById("chips");
+  el.innerHTML = Object.keys(m).sort(function(a,b){return m[b]-m[a];}).map(function(c){
+    return '<span class="chip" data-c="'+esc(c)+'">'+esc(c)+' '+m[c]+'</span>';
+  }).join("");
+  Array.prototype.forEach.call(el.querySelectorAll(".chip"), function(n){
+    n.onclick=function(){
+      CAT = (CAT===n.dataset.c) ? "" : n.dataset.c;
+      Array.prototype.forEach.call(el.querySelectorAll(".chip"), function(x){
+        x.classList.toggle("on", x.dataset.c===CAT);
+      });
+      render();
+    };
+  });
+}
+var t=null;
+document.getElementById("q").addEventListener("input", function(e){
+  clearTimeout(t); var v=e.target.value; t=setTimeout(function(){ Q=v; render(); }, 120);
+});
+fetch("search.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.json();})
+ .then(function(d){ DATA=d; chips(); render(); })
+ .catch(function(){ document.getElementById("count").textContent="索引加载失败，请刷新"; });
+</script>
+__JS__
+</body></html>"""
+    return (page.replace("__NAV__", nav_bar("search", build))
+                .replace("__JS__", SYNC_JS.replace("__BUILD__", build)))
+
+
 def main():
     rows = collect()
     if not rows:
@@ -322,6 +462,13 @@ def main():
         f.write(strip_conflict_markers(build_index(rows), "index.html"))
     with open(os.path.join(OUT, "list.html"), "w", encoding="utf-8") as f:
         f.write(strip_conflict_markers(build_list(rows), "list.html"))
+
+    # 站内搜索：索引 + 页面
+    entries = collect_search(rows)
+    with open(os.path.join(OUT, "search.json"), "w", encoding="utf-8") as f:
+        json.dump(entries, f, ensure_ascii=False, separators=(",", ":"))
+    with open(os.path.join(OUT, "search.html"), "w", encoding="utf-8") as f:
+        f.write(strip_conflict_markers(build_search(entries, BUILD_ID), "search.html"))
     open(os.path.join(OUT, ".nojekyll"), "w").close()
 
     # 版本标记：手机上的页面拿它跟自己比对，发现自己旧了就自动更新

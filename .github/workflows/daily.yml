@@ -124,3 +124,12 @@ jobs:
       - name: 发布到公网
         id: deploy
         uses: actions/deploy-pages@v4
+
+      # 邮件推送放在最后：网页已上线，邮件里的链接一定可用。
+      # 没配 MAIL_USER/MAIL_PASS 时会安静跳过，不影响早报发布。
+      - name: 邮件推送（未配置则跳过）
+        env:
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python3 notify.py

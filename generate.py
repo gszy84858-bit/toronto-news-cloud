@@ -1262,6 +1262,9 @@ def render_md(items, now, window_hours, logs, dropped, prefs, ai_note=""):
     for i, it in enumerate(items, 1):
         L.append("## %d. %s" % (i, it["title"]))
         L.append("")
+        if it.get("alert"):
+            L.append("⚡ **影响生意** · %s" % "、".join(it.get("alert_hits", [])[:3]))
+            L.append("")
         if it.get("image"):
             L.append("![配图](%s)" % it["image"])
             L.append("")
@@ -1404,11 +1407,14 @@ def render_html(md_items, items, now, window_hours, dropped, ai_note=""):
             head = it.get("zh_title") or it["title"]
             tail = ("　<span style='color:var(--mut)'>（%s）</span>"
                     % esc("、".join(it["numbers"][:3]))) if it["numbers"] else ""
-            P.append('<li>%s%s</li>' % (esc(head), tail))
+            flag = "⚡ " if it.get("alert") else ""
+            P.append('<li>%s%s%s</li>' % (flag, esc(head), tail))
         P.append('</ol></div>')
 
     for i, it in enumerate(items, 1):
-        P.append('<div class="card">')
+        hot = bool(it.get("alert"))
+        P.append('<div class="card"%s>' % (
+            ' style="border-left:4px solid #d60621"' if hot else ''))
         # 配图：原文自己的图；点击可跳原文，加载失败自动隐藏，绝不留破图
         if it.get("image"):
             P.append('<a href="%s" target="_blank" rel="noopener" style="display:block">'
@@ -1419,6 +1425,11 @@ def render_html(md_items, items, now, window_hours, dropped, ai_note=""):
         P.append('<h2>%d. %s</h2>' % (i, esc(it["title"])))
         if it.get("zh_title"):
             P.append('<p class="zh">%s</p>' % esc(it["zh_title"]))
+        if hot:
+            P.append('<div class="tags" style="margin-bottom:6px">'
+                     '<span class="tag" style="background:#fdeceb;color:#b3261e;'
+                     'border-color:#f3c6c2">⚡ 影响生意 · %s</span></div>'
+                     % esc("、".join(it.get("alert_hits", [])[:3])))
         P.append('<div class="tags"><span class="tag">分类 <b>%s</b></span>'
                  '<span class="tag">性质 <b>%s</b></span>'
                  '<span class="tag">来源 <b>%s</b></span>'
@@ -1621,6 +1632,34 @@ def main(argv=None):
     picked = pick_items(items, prefs, limit, see_urls, see_titles)
     log("  · 精选 %d 条（目标 %d 条，历史去重屏蔽 %d 条）"
         % (len(picked), limit, max(0, len(items) - len(picked))))
+
+    # 生意相关告警：命中的条目置顶并打标。
+    # 对卖家来说「哪条会影响我」比「哪条最热门」重要，所以放在最前面。
+    # 判定收紧：标题命中即算；只命中摘要时，需要 ≥2 个不同关键词，避免误伤
+    # （曾把「Heritage Toronto Awards」判成生意相关，只因摘要里出现过 housing）。
+    alert_cfg = prefs.get("alerts", {}) or {}
+    if picked and alert_cfg.get("enabled", True):
+        kws = alert_cfg.get("keywords") or []
+        for it in picked:
+            t_hits = find_hits(it["title"].lower(), kws)
+            s_hits = find_hits((it.get("summary") or "").lower(), kws)
+            uniq = sorted(set(t_hits) | set(s_hits))
+            it["alert"] = bool(t_hits) or len(uniq) >= 2
+            it["alert_hits"] = (t_hits or uniq)[:3]
+        # 置顶有上限：全篇标红等于没标，按分数取最相关的几条
+        max_pin = max(1, int(alert_cfg.get("max_pin", 3)))
+        cands = sorted([it for it in picked if it.get("alert")],
+                       key=lambda x: x.get("score", 0), reverse=True)
+        for it in cands[max_pin:]:
+            it["alert"] = False
+        picked.sort(key=lambda x: 0 if x.get("alert") else 1)   # 稳定排序：命中者置顶
+        n_alert = sum(1 for it in picked if it.get("alert"))
+        if n_alert:
+            log("  · 生意相关：%d 条命中关键词，已置顶（%s）" % (
+                n_alert, "、".join(sorted({h for it in picked
+                                          for h in it.get("alert_hits", [])})[:5])))
+        else:
+            log("  · 生意相关：本期无命中（关键词 %d 个）" % len(kws))
 
     if len(picked) < int(prefs.get("min_count", 5)):
         log("  ! 可用条目偏少（%d 条），可能信源异常或时间窗过窄" % len(picked))
