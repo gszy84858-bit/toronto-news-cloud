@@ -116,19 +116,25 @@ CACHE_META = ('<meta http-equiv="Cache-Control" content="no-cache, no-store, mus
               '<meta http-equiv="Expires" content="0">')
 
 
-MARKER_RE = re.compile(r"^<<<<<<< .*$|^=======$|^>>>>>>> .*$", re.M)
+_MARKER_LINE = re.compile(r"^[ \t]*(<{7}|>{7}|={7})([ \t].*)?$", re.M)
+_MARKER_ANY = re.compile(r"<{7}[^\n<]{0,120}|>{7}[^\n<]{0,120}")
 
 
 def strip_conflict_markers(text, where=""):
     """防御：git 合并冲突标记(<<<<<<< HEAD 等)绝不能出现在发布的网页里。
 
-    桌面端自动合并一旦把冲突文件提交进来，这里的兜底会把标记行删掉——
-    宁可内容有重复，也不能让用户看到 "<<<<<<< HEAD" 这种东西。
+    两轮清洗：
+      1) 整行标记（正常 git 冲突的形态）——直接删行；
+      2) 行内残留（两个页面被拼在一行里时会出现）——就地把标记片段抠掉。
+    宁可内容重复，也不能让访客看到 "<<<<<<< HEAD"。
     """
-    if MARKER_RE.search(text):
-        n = len(MARKER_RE.findall(text))
-        print("  ⚠ 检测到 git 冲突标记 %d 处（%s），已自动清除" % (n, where))
-        text = MARKER_RE.sub("", text)
+    if "<<<<<<<" not in text and ">>>>>>>" not in text:
+        return text
+    before = text
+    text = _MARKER_LINE.sub("", text)
+    text = _MARKER_ANY.sub("", text)
+    n = before.count("<<<<<<<") + before.count(">>>>>>>")
+    print("  ⚠ 检测到 git 冲突标记约 %d 处（%s），已自动清除" % (n, where))
     return text
 
 
@@ -313,9 +319,9 @@ def main():
         shutil.copy2(icon, os.path.join(OUT, "app-icon.png"))
 
     with open(os.path.join(OUT, "index.html"), "w", encoding="utf-8") as f:
-        f.write(build_index(rows))
+        f.write(strip_conflict_markers(build_index(rows), "index.html"))
     with open(os.path.join(OUT, "list.html"), "w", encoding="utf-8") as f:
-        f.write(build_list(rows))
+        f.write(strip_conflict_markers(build_list(rows), "list.html"))
     open(os.path.join(OUT, ".nojekyll"), "w").close()
 
     # 版本标记：手机上的页面拿它跟自己比对，发现自己旧了就自动更新

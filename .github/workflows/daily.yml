@@ -73,18 +73,29 @@ jobs:
       - name: 构建手机网页
         run: python3 build_site.py
 
+      # 把关键指标打到日志里，出问题不用打开网页猜
+      - name: 生成结果摘要
+        run: |
+          echo "条数 : $(grep -o '精选 <b>[0-9]*' docs/index.html | head -1)"
+          echo "中文 : $(grep -o '已生成 [0-9]*/[0-9]* 条中文' docs/index.html | head -1)"
+          echo "配图 : $(grep -c 'class=\"cover\"' docs/index.html) 张"
+          echo "版本 : $(grep -o 'var TN_BUILD=\"[0-9]*\"' docs/index.html | head -1)"
+
       # 闸门：只要有任何冲突标记，就不许发布。
       - name: 发布前自检（拦截 git 冲突标记）
         run: |
-          if grep -rEq '^(<<<<<<< |=======$|>>>>>>> )' docs; then
-            echo "::error title=检测到冲突标记::docs/ 里混入了 git 冲突标记，已阻止发布。请检查最近一次合并。"
+          # 不锚定行首：两个页面被拼到同一行时，标记会出现在行中间
+          if grep -rq '<<<<<<<' docs || grep -rq '>>>>>>>' docs \
+             || grep -rqE '^[[:space:]]*={7}[[:space:]]*$' docs; then
+            echo "::error title=检测到冲突标记::docs/ 里混入了 git 冲突标记，已阻止发布。"
+            grep -rn '<<<<<<<\|>>>>>>>' docs | head -5
             exit 1
           fi
           echo "自检通过：docs/ 无冲突标记"
 
       # 打包必须放在「保存本期」之前！
       # git pull --rebase 一旦冲突，会把冲突标记写进工作区；若那之后再打包，
-      # 就会把带 <<<<<<< HEAD 的页面发布上线（今天就是这么翻车的）。
+      # 就会把带 <<<<<<< HEAD 的页面发布上线（踩过两次）。
       - name: 打包网页
         uses: actions/upload-pages-artifact@v3
         with:
@@ -94,7 +105,8 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A output docs
+          # docs/ 已被 .gitignore 排除（纯构建产物，发布走 artifact），只归档 output/
+          git add -A output
           if git diff --cached --quiet; then
             echo "内容无变化，跳过提交"
           else
