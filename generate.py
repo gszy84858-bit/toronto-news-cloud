@@ -931,6 +931,44 @@ GEMINI_ENDPOINT = ("https://generativelanguage.googleapis.com/v1beta/models/"
 GEMINI_MODEL_FALLBACKS = ["gemini-3.8-flash", "gemini-3.5-flash",
                           "gemini-flash-latest", "gemini-2.5-flash"]
 
+GEMINI_LIST_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
+
+
+def gemini_live_models(key, timeout=20):
+    """向 Google 询问：这个 key 现在真正能用哪些模型。
+
+    硬编码模型名是反复翻车的根源（2.0-flash 已关停、2.5-flash 对新用户关闭…）。
+    每次运行前直接问 API，比维护一份永远会过期的名单可靠得多。
+    """
+    try:
+        req = urllib.request.Request(
+            GEMINI_LIST_ENDPOINT + "?pageSize=200",
+            headers={"x-goog-api-key": key})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = json.loads(r.read().decode("utf-8", "replace"))
+    except Exception:
+        return []
+
+    def ver(name):
+        m = re.search(r"gemini-(\d+)(?:\.(\d+))?", name)
+        return (int(m.group(1)), int(m.group(2) or 0)) if m else (0, 0)
+
+    out = []
+    for m in data.get("models") or []:
+        name = (m.get("name") or "").split("/")[-1]
+        if "generateContent" not in (m.get("supportedGenerationMethods") or []):
+            continue
+        low = name.lower()
+        if "flash" not in low:
+            continue
+        if any(x in low for x in ("image", "tts", "live", "robotics",
+                                  "embedding", "vision", "audio")):
+            continue
+        out.append(name)
+    # 版本高的优先；同版本稳定版优先于 preview
+    out.sort(key=lambda n: (ver(n), "preview" not in n, "latest" in n), reverse=True)
+    return out
+
 
 def _ai_prompt(items, glossary=None):
     body_lines = []
@@ -1047,9 +1085,15 @@ def ai_enrich_gemini(items, ai, quiet=False):
     if not key:
         return items, "未配置 Gemini API Key，已回退"
 
-    # 优先用 Secrets 里的 GEMINI_MODEL（换模型不必改代码），再退回内置清单
+    # 优先用 Secrets 里的 GEMINI_MODEL（换模型不必改代码）；
+    # 其次用 API 实时查到的可用列表；最后才是内置兜底名单。
     override = (ai.get("model") or os.environ.get("GEMINI_MODEL") or "").strip()
-    models = ([override] if override else []) + GEMINI_MODEL_FALLBACKS
+    live = gemini_live_models(key)
+    if live:
+        log("  · Gemini 实测可用模型：%s" % "、".join(live[:5]))
+    else:
+        log("  · 未能查询模型列表，使用内置名单")
+    models = ([override] if override else []) + live + GEMINI_MODEL_FALLBACKS
     seen, order = set(), []
     for m in models:
         if m and m not in seen:
@@ -1097,20 +1141,32 @@ def ai_enrich_gemini(items, ai, quiet=False):
             ok_n, len(items), len(items) - ok_n)
     reason = errs[-1] if errs else "未知错误"
     log("  ✗ Gemini 失败原因：%s" % reason)
-    return items, "Gemini 调用失败（%s）" % reason
+    # 网页上只留「哪个模型 + 什么错」，JSON 细节不往页面上贴
+    short = re.sub(r"\s*\{.*$", "", reason)[:60].strip()
+    return items, "Gemini 调用失败（%s）" % (short or "未知错误")
 
 
 def ai_enrich_openai(items, ai, quiet=False):
-    """OpenAI 兼容通道（DeepSeek / 硅基流动 / 通义 等）。保留以备切换。"""
+    """OpenAI 兼容通道（DeepSeek / 硅基流动 / 通义 等）。
+
+    密钥优先级：配置 > OPENAI_API_KEY > DEEPSEEK_API_KEY。
+    provider=deepseek 且没填 base_url/model 时，自动用官方默认值——
+    换供应商只需在 Secrets 里加一个 key，不必改代码。
+    """
+    provider = (ai.get("provider") or "").lower()
     base = (ai.get("base_url") or "").rstrip("/")
-    key = ai.get("api_key") or ""
     model = ai.get("model") or ""
-    if not (base and model):
+    if provider == "deepseek":
+        base = base or "https://api.deepseek.com/v1"
+        model = model or "deepseek-chat"
+    key = (ai.get("api_key") or os.environ.get("OPENAI_API_KEY")
+           or os.environ.get("DEEPSEEK_API_KEY") or "").strip()
+    if not (base and model and key):
         return items, "配置不完整，已回退"
 
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": _ai_prompt(items)}],
+        "messages": [{"role": "user", "content": _ai_prompt(items, ai.get("glossary"))}],
         "temperature": 0.3,
     }
     try:
@@ -1123,20 +1179,36 @@ def ai_enrich_openai(items, ai, quiet=False):
         with urllib.request.urlopen(req, timeout=float(ai.get("timeout", 60))) as r:
             data = json.loads(r.read().decode("utf-8", "replace"))
         content = data["choices"][0]["message"]["content"]
-        n = _apply_ai_rows(items, json.loads(_strip_json_fence(content)))
-        return items, "已润色 %d 条" % n
+        rows = json.loads(_strip_json_fence(content))
+        for it in items:
+            it["biz_advice"] = ""      # 与 Gemini 通道一致：清掉规则引擎的猜测
+        n = _apply_ai_rows(items, rows)
+        return items, "已生成 %d/%d 条中文" % (n, len(items))
     except Exception as e:
         return items, "调用失败（%s），已回退" % type(e).__name__
 
 
 def ai_enrich(items, prefs, quiet=False):
-    ai = prefs.get("ai", {}) or {}
+    ai = dict(prefs.get("ai") or {})
     if not ai.get("enabled"):
         return items, "未启用"
-    provider = (ai.get("provider") or "gemini").lower()
-    if provider == "gemini":
-        return ai_enrich_gemini(items, ai, quiet)
-    return ai_enrich_openai(items, ai, quiet)
+    provider = (os.environ.get("AI_PROVIDER") or ai.get("provider") or "gemini").lower()
+
+    if provider != "gemini":
+        return ai_enrich_openai(items, ai, quiet)
+
+    items, note = ai_enrich_gemini(items, ai, quiet)
+    ok = sum(1 for it in items if it.get("zh_summary"))
+    # 主通道全灭、且配了备用 key → 自动切到 OpenAI 兼容通道（DeepSeek 等）
+    if ok == 0 and (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")):
+        backup = dict(ai)
+        backup["provider"] = "deepseek" if os.environ.get("DEEPSEEK_API_KEY") else "openai"
+        log("  · Gemini 不可用，自动切换到备用通道（%s）" % backup["provider"])
+        items, note2 = ai_enrich_openai(items, backup, quiet)
+        if sum(1 for it in items if it.get("zh_summary")):
+            return items, "Gemini 不可用，已改用 %s：%s" % (backup["provider"], note2)
+        return items, note + "；备用通道也不可用（%s）" % note2
+    return items, note
 
 
 def enrich_items(items, prefs, quiet=False):
@@ -1177,8 +1249,6 @@ def render_md(items, now, window_hours, logs, dropped, prefs, ai_note=""):
     L.append("> 范围：全类别城市新闻 + 商业经贸与政策 + 科技创业")
     L.append("> 信源：%d 个 RSS（CBC / CityNews / Global / Toronto Star / Financial Post / BetaKit 等）"
              % len([x for x in logs if x.strip().startswith("+")]))
-    if ai_note:
-        L.append("> 中文转换：%s" % ai_note)
     L.append("")
 
     L.append("## 今日要点")
@@ -1235,6 +1305,8 @@ def render_md(items, now, window_hours, logs, dropped, prefs, ai_note=""):
         "%s %d" % (k, v) for k, v in sorted(nat_dist.items(), key=lambda x: -x[1])))
     L.append("| 来源分布 | %s |" % "、".join(
         "%s %d" % (k, v) for k, v in sorted(src_dist.items(), key=lambda x: -x[1])))
+    if ai_note:
+        L.append("| 中文转换 | %s |" % ai_note)
     L.append("")
     L.append("**分类体系（固定标签）**")
     L.append("")
@@ -1321,10 +1393,9 @@ def render_html(md_items, items, now, window_hours, dropped, ai_note=""):
     P.append('<header><h1>🍁 多伦多新闻早报 · %s年%s月%s日（%s）</h1>' % (
         d[:4], d[5:7], d[8:10], wd))
     P.append('<div class="meta">精选 <b>%d 条</b> · 覆盖窗口 %s – %s EDT<br>'
-             '全类别城市新闻 + 商业经贸与政策 + 科技创业%s</div>' % (
+             '全类别城市新闻 + 商业经贸与政策 + 科技创业</div>' % (
                  len(items), start.strftime("%m/%d %H:%M"),
-                 now.strftime("%m/%d %H:%M"),
-                 ("　·　中文转换：%s" % esc(ai_note)) if ai_note else ""))
+                 now.strftime("%m/%d %H:%M")))
     P.append('</header>')
 
     if items[:3]:
@@ -1376,6 +1447,9 @@ def render_html(md_items, items, now, window_hours, dropped, ai_note=""):
     P.append('<tr><td>条数</td><td>%d 条</td></tr>' % len(items))
     P.append('<tr><td>配图</td><td>%d/%d 条</td></tr>' % (
         sum(1 for it in items if it.get("image")), len(items)))
+    if ai_note:
+        # 放在报告最后的统计表里：既完整保留信息，又不占开头版面
+        P.append('<tr><td>中文转换</td><td>%s</td></tr>' % esc(ai_note))
     P.append('<tr><td>分类分布</td><td>%s</td></tr>' % esc("、".join(
         "%s %d" % (k, v) for k, v in sorted(cat_dist.items(), key=lambda x: -x[1]))))
     P.append('<tr><td>性质分布</td><td>%s</td></tr>' % esc("、".join(
