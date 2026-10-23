@@ -413,6 +413,12 @@ function render(){
     '<div class="empty">没有匹配的条目<br>'
     + '<span style="font-size:13px">试试更短的关键词，或点上面的分类</span></div>';
 }
+function paintChips(){
+  var el=document.getElementById("chips");
+  Array.prototype.forEach.call(el.querySelectorAll(".chip"), function(x){
+    x.classList.toggle("on", x.dataset.c===CAT);
+  });
+}
 function chips(){
   var m={}; DATA.forEach(function(r){ m[r.c]=(m[r.c]||0)+1; });
   var el=document.getElementById("chips");
@@ -422,9 +428,10 @@ function chips(){
   Array.prototype.forEach.call(el.querySelectorAll(".chip"), function(n){
     n.onclick=function(){
       CAT = (CAT===n.dataset.c) ? "" : n.dataset.c;
-      Array.prototype.forEach.call(el.querySelectorAll(".chip"), function(x){
-        x.classList.toggle("on", x.dataset.c===CAT);
-      });
+      // 点分类 = 浏览该分类：清掉关键词。否则「关税 + 治安司法」会得出 0 条，
+      // 而 chip 上写着 4 条，用户会以为坏了（真实踩过）。
+      Q = ""; box.value = ""; syncUrl();
+      paintChips();
       render();
     };
   });
@@ -435,6 +442,10 @@ function urlQ(){
   var m=location.search.match(/[?&]q=([^&]*)/);
   try { return m ? decodeURIComponent(m[1].replace(/\+/g," ")) : ""; } catch(e){ return ""; }
 }
+function urlCat(){
+  var m=location.search.match(/[?&]cat=([^&]*)/);
+  try { return m ? decodeURIComponent(m[1].replace(/\+/g," ")) : ""; } catch(e){ return ""; }
+}
 function syncUrl(){
   if(!history.replaceState) return;
   var u=location.pathname+(Q ? "?q="+encodeURIComponent(Q) : "");
@@ -443,14 +454,21 @@ function syncUrl(){
 box.addEventListener("input", function(e){
   clearTimeout(t);
   var v=e.target.value;
-  t=setTimeout(function(){ Q=v; syncUrl(); render(); }, 120);
+  t=setTimeout(function(){
+    Q=v;
+    // 输入关键词 = 全库搜索：取消分类选择，两个维度不叠加
+    if(CAT){ CAT=""; paintChips(); }
+    syncUrl(); render();
+  }, 120);
 });
 fetch("search.json?t="+Date.now(),{cache:"no-store"}).then(function(r){
   if(!r.ok) throw new Error("HTTP "+r.status);
   return r.json();
 }).then(function(d){
   DATA=d; chips();
-  Q=urlQ(); if(Q) box.value=Q;
+  Q=urlQ();
+  if(Q){ box.value=Q; CAT=""; } else { CAT=urlCat(); }
+  paintChips();
   render();
 }).catch(function(err){
   document.getElementById("count").textContent =
