@@ -52,6 +52,9 @@ def collect():
 # 构建版本号：每次构建都变，用来判断「浏览器里那一页是不是旧的」
 BUILD_ID = str(int(time.time()))
 
+# 顶栏底色：暗酒红。刻意压深，和「⚡影响生意」的正红分开，避免和 iOS 状态栏糊成一片。
+NAV_BG = "#7a1a17"
+
 
 def nav_bar(active, build):
     """顶部红条。三页都要能互相走通（单期正文页尤其不能是死路）。"""
@@ -69,8 +72,8 @@ def nav_bar(active, build):
     btns = "".join('<a href="%s" style="color:#fff;text-decoration:none;font-size:13px;'
                    'border:1px solid rgba(255,255,255,.6);border-radius:6px;'
                    'padding:3px 10px;">%s</a>' % (h, t) for h, t in links)
-    return """
-<div style="position:sticky;top:0;z-index:99;background:#d60621;color:#fff;
+    nav = """
+<div style="position:sticky;top:0;z-index:99;background:__NAV_BG__;color:#fff;
 font:14px/1.4 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;
 padding:9px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
 <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
@@ -83,6 +86,7 @@ font-family:inherit;cursor:pointer;">刷新</button>
 </span>
 </div>
 """ % btns
+    return nav.replace("__NAV_BG__", NAV_BG)
 
 
 # 旧版本自愈脚本：手机里缓存的那一页若与服务器版本不一致，自动拉最新一版。
@@ -114,7 +118,8 @@ setInterval(tnCheck, 300000);
 </script>
 """
 
-CACHE_META = ('<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">'
+CACHE_META = ('<meta name="theme-color" content="%s">' % NAV_BG +
+              '<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">'
               '<meta http-equiv="Pragma" content="no-cache">'
               '<meta http-equiv="Expires" content="0">')
 
@@ -221,7 +226,8 @@ def build_index(rows):
                   % esc(m_img.group(1)))
         html = html.replace(
             "</head>",
-            og + '<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">'
+            og + '<meta name="theme-color" content="%s">' % NAV_BG +
+            '<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">'
             '<meta http-equiv="Pragma" content="no-cache">'
             '<meta http-equiv="Expires" content="0"></head>', 1)
 
@@ -259,6 +265,7 @@ def build_list(rows):
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="多伦多早报">
+<meta name="theme-color" content="#7a1a17">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <link rel="apple-touch-icon" href="app-icon.png">
 <title>多伦多新闻早报 · 往期</title>
@@ -340,6 +347,7 @@ def build_search(entries, build):
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="多伦多早报">
+<meta name="theme-color" content="#7a1a17">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <link rel="apple-touch-icon" href="app-icon.png">
 <title>搜索 · 多伦多新闻早报</title>
