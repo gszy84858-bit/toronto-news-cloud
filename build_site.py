@@ -52,8 +52,9 @@ def collect():
 # 构建版本号：每次构建都变，用来判断「浏览器里那一页是不是旧的」
 BUILD_ID = str(int(time.time()))
 
-# 顶栏底色：暗酒红。刻意压深，和「⚡影响生意」的正红分开，避免和 iOS 状态栏糊成一片。
-NAV_BG = "#7a1a17"
+# 顶栏底色：正红与暗酒红之间的 #c62828 —— 鲜艳但不刺眼。
+# 状态栏（theme-color）与它同色，这是刻意的：上下连贯成一条。
+NAV_BG = "#c62828"
 
 
 def nav_bar(active, build):
@@ -265,7 +266,7 @@ def build_list(rows):
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="多伦多早报">
-<meta name="theme-color" content="#7a1a17">
+<meta name="theme-color" content="__NAV_BG__">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <link rel="apple-touch-icon" href="app-icon.png">
 <title>多伦多新闻早报 · 往期</title>
@@ -297,6 +298,7 @@ text-decoration:none;font-size:14px}
 __JS__
 </body></html>""" % items_html
     return (page.replace("__NAV__", nav_bar("list", BUILD_ID))
+                .replace("__NAV_BG__", NAV_BG)
                 .replace("__JS__", SYNC_JS.replace("__BUILD__", BUILD_ID)))
 
 
@@ -347,7 +349,7 @@ def build_search(entries, build):
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="多伦多早报">
-<meta name="theme-color" content="#7a1a17">
+<meta name="theme-color" content="__NAV_BG__">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <link rel="apple-touch-icon" href="app-icon.png">
 <title>搜索 · 多伦多新闻早报</title>
@@ -514,6 +516,7 @@ fetch("search.json?t="+Date.now(),{cache:"no-store"}).then(function(r){
 __JS__
 </body></html>"""
     return (page.replace("__NAV__", nav_bar("search", build))
+                .replace("__NAV_BG__", NAV_BG)
                 .replace("__JS__", SYNC_JS.replace("__BUILD__", build)))
 
 
