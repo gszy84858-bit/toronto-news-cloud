@@ -354,8 +354,14 @@ font:16px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",s
 input[type=search]{width:100%;padding:13px 15px;font-size:16px;border-radius:12px;
 border:1px solid var(--line);background:var(--card);color:var(--fg);outline:none}
 input[type=search]:focus{border-color:var(--acc)}
-.chips{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 6px}
-.chip{font-size:13px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);
+.fbar{display:flex;align-items:center;gap:8px;margin:12px 0 2px;flex-wrap:wrap}
+.fbtn{font-size:13px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);
+background:var(--card);color:var(--mut);cursor:pointer;font-family:inherit}
+.fcur{font-size:13px;padding:5px 11px;border-radius:999px;border:1px solid var(--acc);
+color:var(--acc);cursor:pointer;display:none}
+.chips{display:none;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
+.chips.open{display:flex}
+.chip{font-size:12.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);
 background:var(--card);color:var(--mut);cursor:pointer;user-select:none}
 .chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
 .count{color:var(--mut);font-size:13px;margin:10px 0 14px}
@@ -372,6 +378,10 @@ border-radius:6px;padding:1px 7px;margin:6px 6px 0 0}
 </style></head><body>__NAV__<div class="wrap">
 <input id="q" type="search" placeholder="搜标题、关键词、来源…（如 关税 / TTC / 罢工）"
        autocomplete="off" autocorrect="off" spellcheck="false">
+<div class="fbar">
+  <button class="fbtn" id="ftog" type="button">筛选 ▾</button>
+  <span class="fcur" id="fcur"></span>
+</div>
 <div class="chips" id="chips"></div>
 <div class="count" id="count">正在加载…</div>
 <div id="list"></div>
@@ -418,6 +428,15 @@ function paintChips(){
   Array.prototype.forEach.call(el.querySelectorAll(".chip"), function(x){
     x.classList.toggle("on", x.dataset.c===CAT);
   });
+  var f=document.getElementById("fcur");
+  if(f){
+    f.style.display = CAT ? "inline-block" : "none";
+    f.textContent = CAT ? CAT+" ×" : "";
+  }
+}
+function closePanel(){
+  document.getElementById("chips").classList.remove("open");
+  document.getElementById("ftog").textContent = "筛选 ▾";
 }
 function chips(){
   var m={}; DATA.forEach(function(r){ m[r.c]=(m[r.c]||0)+1; });
@@ -428,15 +447,24 @@ function chips(){
   Array.prototype.forEach.call(el.querySelectorAll(".chip"), function(n){
     n.onclick=function(){
       CAT = (CAT===n.dataset.c) ? "" : n.dataset.c;
-      // 点分类 = 浏览该分类：清掉关键词。否则「关税 + 治安司法」会得出 0 条，
-      // 而 chip 上写着 4 条，用户会以为坏了（真实踩过）。
+      // 点分类 = 浏览该分类：清掉关键词，并收起面板（省手机版面）
       Q = ""; box.value = ""; syncUrl();
       paintChips();
+      closePanel();
       render();
     };
   });
 }
 var t=null, box=document.getElementById("q");
+// 折叠面板：手机上分类 chip 默认收起，点「筛选」才展开
+document.getElementById("ftog").addEventListener("click", function(){
+  var open = document.getElementById("chips").classList.toggle("open");
+  this.textContent = open ? "筛选 ▴" : "筛选 ▾";
+});
+// 当前筛选标签，点一下取消
+document.getElementById("fcur").addEventListener("click", function(){
+  CAT = ""; Q = ""; box.value = ""; paintChips(); syncUrl(); render();
+});
 // 网址里带 ?q=关键词 时直接搜（方便分享，也方便远程排查）
 function urlQ(){
   var m=location.search.match(/[?&]q=([^&]*)/);
