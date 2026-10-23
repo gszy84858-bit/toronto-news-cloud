@@ -361,9 +361,20 @@ def build_search(entries, build):
 body{margin:0;background:var(--bg);color:var(--fg);
 font:16px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif}
 .wrap{max-width:680px;margin:0 auto;padding:20px 16px 64px}
-input[type=search]{width:100%;padding:13px 15px;font-size:16px;border-radius:12px;
-border:1px solid var(--line);background:var(--card);color:var(--fg);outline:none}
+/* 搜索框字号与正文（15px）一致。
+   iOS 硬规则：输入框字号 <16px 时，点一下会整页自动放大。
+   做法：计算值保持 16px（不触发放大），再 scale 到 15px 的观感；
+   外面套 .qbox 裁掉放大后的溢出，避免页面横向滚动。 */
+.qbox{overflow:hidden;border-radius:11px}
+input[type=search]{display:block;width:100%;padding:10px 13px;font-size:15px;
+font-weight:400;border-radius:11px;border:1px solid var(--line);
+background:var(--card);color:var(--fg);outline:none;font-family:inherit}
+input[type=search]::placeholder{color:var(--mut)}
 input[type=search]:focus{border-color:var(--acc)}
+@supports (-webkit-touch-callout:none){
+  input[type=search]{font-size:16px;transform:scale(.9375);transform-origin:left center;
+  width:106.667%}
+}
 .fbar{display:flex;align-items:center;gap:8px;margin:12px 0 2px;flex-wrap:wrap}
 .fbtn{font-size:13px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);
 background:var(--card);color:var(--mut);cursor:pointer;font-family:inherit}
@@ -386,8 +397,9 @@ a.r .x{color:var(--mut);font-size:13px;margin-top:6px}
 border-radius:6px;padding:1px 7px;margin:6px 6px 0 0}
 .empty{color:var(--mut);text-align:center;padding:40px 0}
 </style></head><body>__NAV__<div class="wrap">
-<input id="q" type="search" placeholder="搜标题、关键词、来源…（如 关税 / TTC / 罢工）"
-       autocomplete="off" autocorrect="off" spellcheck="false">
+<div class="qbox"><input id="q" type="search"
+  placeholder="搜标题、关键词、来源…（如 关税 / TTC / 罢工）"
+  autocomplete="off" autocorrect="off" spellcheck="false"></div>
 <div class="fbar">
   <button class="fbtn" id="ftog" type="button">筛选 ▾</button>
   <span class="fcur" id="fcur"></span>
