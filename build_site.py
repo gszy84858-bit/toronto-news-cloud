@@ -254,7 +254,7 @@ def build_list(rows):
                      '<span class="w">%s</span>%s</a>'
                      % (esc(quote(fn)), int(d[5:7]), int(d[8:10]), wd, badge))
     items_html = "\n".join(items) or '<a class="item"><span class="d">暂无期刊</span></a>'
-    page = """<!DOCTYPE html>
+    page = r"""<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -335,7 +335,7 @@ def collect_search(rows):
 
 def build_search(entries, build):
     """站内搜索页：读 search.json，纯前端过滤，手机也能用。"""
-    page = """<!DOCTYPE html>
+    page = r"""<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -380,12 +380,23 @@ border-radius:6px;padding:1px 7px;margin:6px 6px 0 0}
 var DATA=[], CAT="", Q="";
 function esc(s){return (s||"").replace(/[&<>"]/g,function(c){
   return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+// 出错时把原因写到计数行，别让人对着空白页猜
+window.onerror=function(m){
+  var c=document.getElementById("count");
+  if(c) c.textContent="脚本出错："+m+" —— 请下拉刷新一次";
+};
+function tokens(s){
+  return (s||"").trim().toLowerCase().split(/[\s\u3000]+/).filter(function(x){return x;});
+}
 function render(){
-  var q=Q.trim().toLowerCase();
+  var toks=tokens(Q);
   var rows=DATA.filter(function(r){
     if(CAT && r.c!==CAT) return false;
-    if(!q) return true;
-    return ((r.t+" "+(r.z||"")+" "+(r.x||"")+" "+r.c+" "+r.s).toLowerCase()).indexOf(q)>=0;
+    if(!toks.length) return true;
+    var blob=(r.t+" "+(r.z||"")+" "+(r.x||"")+" "+r.c+" "+r.n+" "+r.s).toLowerCase();
+    // 多词按「都要命中」处理：比整串精确匹配宽容得多（"关税 汽车" 也能搜到）
+    for(var i=0;i<toks.length;i++){ if(blob.indexOf(toks[i])<0) return false; }
+    return true;
   });
   document.getElementById("count").textContent = rows.length + " 条结果"
     + (CAT ? "（"+CAT+"）" : "");
@@ -398,7 +409,9 @@ function render(){
       + '<span class="tag">'+esc(r.c)+'</span><span class="tag">'+esc(r.n)+'</span>'
       + '<span class="tag">'+esc(r.s)+'</span></a>';
   }).join("");
-  document.getElementById("list").innerHTML = h || '<div class="empty">没有匹配的条目</div>';
+  document.getElementById("list").innerHTML = h ||
+    '<div class="empty">没有匹配的条目<br>'
+    + '<span style="font-size:13px">试试更短的关键词，或点上面的分类</span></div>';
 }
 function chips(){
   var m={}; DATA.forEach(function(r){ m[r.c]=(m[r.c]||0)+1; });
@@ -416,13 +429,33 @@ function chips(){
     };
   });
 }
-var t=null;
-document.getElementById("q").addEventListener("input", function(e){
-  clearTimeout(t); var v=e.target.value; t=setTimeout(function(){ Q=v; render(); }, 120);
+var t=null, box=document.getElementById("q");
+// 网址里带 ?q=关键词 时直接搜（方便分享，也方便远程排查）
+function urlQ(){
+  var m=location.search.match(/[?&]q=([^&]*)/);
+  try { return m ? decodeURIComponent(m[1].replace(/\+/g," ")) : ""; } catch(e){ return ""; }
+}
+function syncUrl(){
+  if(!history.replaceState) return;
+  var u=location.pathname+(Q ? "?q="+encodeURIComponent(Q) : "");
+  history.replaceState(null, "", u);
+}
+box.addEventListener("input", function(e){
+  clearTimeout(t);
+  var v=e.target.value;
+  t=setTimeout(function(){ Q=v; syncUrl(); render(); }, 120);
 });
-fetch("search.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.json();})
- .then(function(d){ DATA=d; chips(); render(); })
- .catch(function(){ document.getElementById("count").textContent="索引加载失败，请刷新"; });
+fetch("search.json?t="+Date.now(),{cache:"no-store"}).then(function(r){
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return r.json();
+}).then(function(d){
+  DATA=d; chips();
+  Q=urlQ(); if(Q) box.value=Q;
+  render();
+}).catch(function(err){
+  document.getElementById("count").textContent =
+    "索引加载失败（"+err.message+"）—— 请下拉刷新，或稍后再试";
+});
 </script>
 __JS__
 </body></html>"""
