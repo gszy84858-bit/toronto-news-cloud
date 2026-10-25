@@ -1374,15 +1374,79 @@ table{width:100%;border-collapse:collapse;font-size:13.5px}
 td{padding:8px 0;border-bottom:1px solid var(--line);vertical-align:top}
 td:first-child{color:var(--mut);width:88px}
 footer{color:var(--mut);font-size:12px;margin-top:30px;text-align:center}
+.shrow{margin-top:12px;text-align:right}
+.sh{font:13px/1 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;
+color:var(--acc);background:transparent;border:1px solid var(--line);
+border-radius:8px;padding:7px 13px;cursor:pointer}
+.sh:active{opacity:.55}
+#tnToast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);
+background:#1c1c1a;color:#fff;font-size:13px;padding:9px 16px;border-radius:20px;
+opacity:0;transition:opacity .25s;z-index:999;pointer-events:none;max-width:80vw;
+text-align:center}
 </style></head><body><div class="wrap">
 __BODY__
-</div></body></html>
+</div>__SHARE_JS__</body></html>
 """
 
 
 def esc(s):
     return html_mod.escape(str(s or ""), quote=True)
 
+
+SHARE_JS = r"""
+<script>
+var TN_NL = String.fromCharCode(10);
+function tnToast(msg){
+  var d=document.getElementById("tnToast");
+  if(!d){ d=document.createElement("div"); d.id="tnToast"; document.body.appendChild(d); }
+  d.textContent=msg; d.style.opacity="1";
+  clearTimeout(window._tnT);
+  window._tnT=setTimeout(function(){ d.style.opacity="0"; },1900);
+}
+function tnCopy(text,url){
+  var s=(text ? text+TN_NL+TN_NL : "") + url;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(s).then(function(){
+      tnToast("已复制，粘到微信/短信即可发送");
+    },function(){ tnToast("复制失败，请长按文字手动选择"); });
+    return;
+  }
+  var ta=document.createElement("textarea");
+  ta.value=s; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand("copy"); tnToast("已复制，粘到微信/短信即可发送"); }
+  catch(e){ tnToast("复制失败，请长按文字手动选择"); }
+  document.body.removeChild(ta);
+}
+function tnShare(o){
+  var url=o.url||location.href, text=o.text||"";
+  if(navigator.share){
+    navigator.share({title:o.title||document.title, text:text, url:url})
+      .catch(function(e){
+        if(e && e.name==="AbortError") return;
+        tnCopy(text,url);
+      });
+  } else {
+    tnCopy(text,url);
+  }
+}
+function tnShareItem(btn){
+  var t=btn.getAttribute("data-t")||"", z=btn.getAttribute("data-z")||"",
+      x=btn.getAttribute("data-x")||"", u=btn.getAttribute("data-u")||"";
+  var head=z||t, text=head;
+  if(z && t) text+=TN_NL+t;
+  if(x) text+=TN_NL+TN_NL+x;
+  if(!text) text=document.title;
+  tnShare({title:head, text:text, url:u||location.href});
+}
+function tnSharePage(){
+  var h=document.querySelector("h1");
+  var title=h?h.textContent:document.title;
+  tnShare({title:title, text:title+TN_NL+"多伦多/GTA 每日精选 · 中英对照",
+           url:location.origin+location.pathname});
+}
+</script>
+"""
 
 IMG_COVER_STYLE = ("display:block;width:100%;aspect-ratio:16/9;object-fit:cover;"
                    "border-radius:10px;margin:0 0 14px;background:#ecebe7")
@@ -1396,7 +1460,10 @@ def render_html(md_items, items, now, window_hours, dropped, ai_note=""):
     P.append('<header><h1>🍁 多伦多新闻早报 · %s年%s月%s日（%s）</h1>' % (
         d[:4], d[5:7], d[8:10], wd))
     P.append('<div class="meta">精选 <b>%d 条</b> · 覆盖窗口 %s – %s EDT<br>'
-             '全类别城市新闻 + 商业经贸与政策 + 科技创业</div>' % (
+             '全类别城市新闻 + 商业经贸与政策 + 科技创业<br>'
+             '<a href="#" onclick="tnSharePage();return false;" '
+             'style="color:var(--acc);text-decoration:none;font-size:13px">'
+             '分享本期给朋友</a></div>' % (
                  len(items), start.strftime("%m/%d %H:%M"),
                  now.strftime("%m/%d %H:%M")))
     P.append('</header>')
@@ -1448,6 +1515,10 @@ def render_html(md_items, items, now, window_hours, dropped, ai_note=""):
                      % esc(it["biz_advice"]))
         P.append('<div class="src">来源 · %s · <a href="%s" target="_blank">%s</a></div>' % (
             it["dt"].strftime("%Y-%m-%d %H:%M"), esc(it["link"]), esc(it["link"][:90])))
+        P.append('<div class="shrow"><button class="sh" onclick="tnShareItem(this)"'
+                 ' data-t="%s" data-z="%s" data-x="%s" data-u="%s">分享这条</button></div>' % (
+                     esc(it["title"]), esc(it.get("zh_title", "")),
+                     esc((it.get("zh_summary") or "")[:110]), esc(it["link"])))
         P.append('</div>')
 
     cat_dist, nat_dist = {}, {}
@@ -1469,11 +1540,14 @@ def render_html(md_items, items, now, window_hours, dropped, ai_note=""):
         P.append('<tr><td>未收录</td><td>%s</td></tr>' % esc(
             "；".join("%s %d 条" % (r, n) for r, n in dropped)))
     P.append('</table></div>')
+    P.append('<div style="text-align:center;margin:24px 0 4px">'
+             '<button class="sh" onclick="tnSharePage()">分享本期给朋友</button></div>')
     P.append('<footer>由「多伦多新闻早报」独立程序 v%s 于 %s 自动生成</footer>'
              % (APP_VERSION, now.strftime("%Y-%m-%d %H:%M:%S")))
 
-    return HTML_TPL.replace("__TITLE__", "%s · %s" % (APP_NAME, d)).replace(
-        "__BODY__", "\n".join(P))
+    return (HTML_TPL.replace("__TITLE__", "%s · %s" % (APP_NAME, d))
+            .replace("__BODY__", "\n".join(P))
+            .replace("__SHARE_JS__", SHARE_JS))
 
 
 # ----------------------------------------------------------------------------
