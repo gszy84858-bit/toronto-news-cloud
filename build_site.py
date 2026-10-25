@@ -73,6 +73,12 @@ def nav_bar(active, build):
     btns = "".join('<a href="%s" style="color:#fff;text-decoration:none;font-size:13px;'
                    'border:1px solid rgba(255,255,255,.6);border-radius:6px;'
                    'padding:3px 10px;">%s</a>' % (h, t) for h, t in links)
+    # 首页与单期正文页带分享能力（这两类页面注入了 SHARE_JS），顶栏给个显眼入口
+    if active in ("index", "report"):
+        btns += ('<a href="#" onclick="tnSharePage();return false;" '
+                 'style="color:#fff;text-decoration:none;font-size:13px;'
+                 'border:1px solid rgba(255,255,255,.6);border-radius:6px;'
+                 'padding:3px 10px;">分享</a>')
     nav = """
 <div style="position:sticky;top:0;z-index:99;background:__NAV_BG__;color:#fff;
 font:14px/1.4 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;

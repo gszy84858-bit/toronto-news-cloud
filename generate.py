@@ -1364,6 +1364,7 @@ border-left:2px solid var(--line);padding-left:12px}
 .biz{background:rgba(15,110,86,.08);border-left:3px solid var(--acc2);
 border-radius:0 8px 8px 0;padding:12px 16px;margin:0 0 14px;font-size:14.5px}
 .biz b{color:var(--acc2)}
+.card{scroll-margin-top:64px}
 .src{font-size:12.5px;color:var(--mut);padding-top:12px;border-top:1px solid var(--line)}
 .src a{color:var(--acc);text-decoration:none;word-break:break-all}
 .stats{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-top:26px}
@@ -1435,7 +1436,9 @@ function tnShareItem(btn){
   if(z && t) text+=TN_NL+t;
   if(x) text+=TN_NL+TN_NL+x;
   if(!text) text=document.title;
-  tnShare({title:head, text:text, url:u||location.href});
+  var abs=location.href;
+  if(u){ try { abs=new URL(u, location.href).href; } catch(e){ abs=u; } }
+  tnShare({title:head, text:text, url:abs});
 }
 function tnSharePage(){
   var h=document.querySelector("h1");
@@ -1478,8 +1481,8 @@ def render_html(md_items, items, now, window_hours, dropped, ai_note=""):
 
     for i, it in enumerate(items, 1):
         hot = bool(it.get("alert"))
-        P.append('<div class="card"%s>' % (
-            ' style="border-left:4px solid #d60621"' if hot else ''))
+        P.append('<div class="card" id="n%d"%s>' % (
+            i, ' style="border-left:4px solid #d60621"' if hot else ''))
         # 配图：原文自己的图；点击可跳原文，加载失败自动隐藏，绝不留破图
         if it.get("image"):
             P.append('<a href="%s" target="_blank" rel="noopener" style="display:block">'
@@ -1513,10 +1516,13 @@ def render_html(md_items, items, now, window_hours, dropped, ai_note=""):
                      % esc(it["biz_advice"]))
         P.append('<div class="src">来源 · %s · <a href="%s" target="_blank">%s</a></div>' % (
             it["dt"].strftime("%Y-%m-%d %H:%M"), esc(it["link"]), esc(it["link"][:90])))
+        # 分享链接指向「本期页面 + 该条锚点」：对方看到的是我们这份中英对照的早报，
+        # 而不是被直接甩到英文原站（原来那样等于替媒体导流，用户读不到中文）。
         P.append('<div class="shrow"><button class="sh" onclick="tnShareItem(this)"'
                  ' data-t="%s" data-z="%s" data-x="%s" data-u="%s">分享这条</button></div>' % (
                      esc(it["title"]), esc(it.get("zh_title", "")),
-                     esc((it.get("zh_summary") or "")[:110]), esc(it["link"])))
+                     esc((it.get("zh_summary") or "")[:110]),
+                     esc("多伦多新闻早报_%s.html#n%d" % (d, i))))
         P.append('</div>')
 
     cat_dist, nat_dist = {}, {}
