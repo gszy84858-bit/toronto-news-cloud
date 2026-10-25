@@ -1083,6 +1083,9 @@ def ai_enrich_gemini(items, ai, quiet=False):
     key = (ai.get("api_key") or os.environ.get("GEMINI_API_KEY")
            or os.environ.get("GOOGLE_API_KEY") or "").strip()
     if not key:
+        # 本地预览（不带密钥）时给一句人话，避免看到"未配置"以为线上坏了
+        if os.environ.get("TN_PREVIEW"):
+            return items, "本地预览版 · 未接翻译（线上版本为全中文）"
         return items, "未配置 Gemini API Key，已回退"
 
     # 优先用 Secrets 里的 GEMINI_MODEL（换模型不必改代码）；
