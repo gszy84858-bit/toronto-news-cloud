@@ -1319,12 +1319,7 @@ def render_md(items, now, window_hours, logs, dropped, prefs, ai_note=""):
     L.append("- 分类（领域）：市政政治 / 交通 / 住房地产 / 商业经贸 / 科技创业 / 治安司法 / 教育医疗 / 生活服务 / 文体活动")
     L.append("- 性质（事件属性）：突发 / 政策发布 / 政策执行预告 / 调查结论 / 数据报告 / 融资里程碑 / 产品发布 / 进展更新 / 深度报道 / 服务提示 / 舆论争议")
     L.append("")
-    if dropped:
-        L.append("**本期未收录及原因**")
-        L.append("")
-        for reason, n in dropped:
-            L.append("- %s：%d 条" % (reason, n))
-        L.append("")
+    # 「本期未收录及原因」不写进读者版本（只在运行日志里看）
     L.append("---")
     L.append("")
     L.append("*由「多伦多新闻早报」独立程序 v%s 于 %s 自动生成*" % (
@@ -1539,9 +1534,7 @@ def render_html(md_items, items, now, window_hours, dropped, ai_note=""):
         "%s %d" % (k, v) for k, v in sorted(cat_dist.items(), key=lambda x: -x[1]))))
     P.append('<tr><td>性质分布</td><td>%s</td></tr>' % esc("、".join(
         "%s %d" % (k, v) for k, v in sorted(nat_dist.items(), key=lambda x: -x[1]))))
-    if dropped:
-        P.append('<tr><td>未收录</td><td>%s</td></tr>' % esc(
-            "；".join("%s %d 条" % (r, n) for r, n in dropped)))
+    # 「未收录」只在日志里看，不放进给读者看的页面（读者不关心我们筛掉了什么）
     P.append('</table></div>')
     P.append('<div style="text-align:center;margin:24px 0 4px">'
              '<button class="sh" onclick="tnSharePage()">分享本期给朋友</button></div>')
