@@ -181,7 +181,7 @@ BANNER = """
 padding:12px 16px;border-radius:12px;background:#fff7e6;border:1px solid #f0d9a8;
 color:#6b5a2e;font:14px/1.6 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;">
 <b>今日早报还在路上</b><br>
-云端每天上午 10:00 前后自动生成，下面先看最近一期。本页稍后会自动重试。
+云端每天早上自动生成（约 7–8 点），下面先看最近一期。本页稍后会自动重试。
 </div>
 """
 
