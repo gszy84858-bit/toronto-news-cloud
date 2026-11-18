@@ -14,6 +14,7 @@ on:
     # 云端自己归档早报时只改 output/ 和 docs/，不在列表里 → 不会自己触发自己。
     paths:
       - "generate.py"
+      - "speak.py"
       - "build_site.py"
       - "config/**"
       - ".github/workflows/daily.yml"
@@ -53,6 +54,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
 
       # 官方 Pages 流程的前置步骤（读取/初始化 Pages 配置）
       - name: 配置 Pages
@@ -70,8 +75,23 @@ jobs:
       - name: 抓取并生成早报（Gemini 生成中文）
         run: python3 generate.py --force --quiet --stats
 
+      # 语音是增强功能：合成失败也绝不阻断早报发布。
+      # 没有 mp3 时 build_site.py 不会放「听语音」按钮，绝不留死链。
+      - name: 合成中文语音播报
+        id: tts
+        continue-on-error: true
+        run: python3 speak.py --quiet
+
       - name: 构建手机网页
         run: python3 build_site.py
+
+      - name: 语音状态
+        run: |
+          if [ "${{ steps.tts.outcome }}" = "success" ]; then
+            echo "语音播报：已生成，页面上的「听本期语音播报」可点"
+          else
+            echo "::warning::语音播报未生成（TTS 服务波动），今日早报照常发布，无语音入口"
+          fi
 
       # 把关键指标打到日志里，出问题不用打开网页猜
       - name: 生成结果摘要
@@ -100,6 +120,24 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs
+
+      - name: 清理旧音频（只保留最近 60 天，避免仓库膨胀）
+        run: |
+          python3 - <<'PY'
+          import os, re
+          from datetime import datetime, timedelta
+          out = "output"
+          cutoff = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
+          pats = [re.compile(r"^早报音频_(\d{4}-\d{2}-\d{2})\.mp3$"),
+                  re.compile(r"^播报稿_(\d{4}-\d{2}-\d{2})\.txt$")]
+          n = 0
+          for fn in os.listdir(out):
+              for p in pats:
+                  m = p.match(fn)
+                  if m and m.group(1) < cutoff:
+                      os.remove(os.path.join(out, fn)); n += 1; break
+          print("已清理 %d 个超过 60 天的音频文件" % n)
+          PY
 
       - name: 保存本期（保留往期，供下次去重与归档）
         run: |
