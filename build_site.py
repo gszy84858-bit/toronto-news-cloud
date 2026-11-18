@@ -30,6 +30,8 @@ SRC = os.path.join(HERE, "output")
 OUT = os.path.join(HERE, "docs")
 
 REPORT_RE = re.compile(r"^多伦多新闻早报_(\d{4}-\d{2}-\d{2})\.html$")
+AUDIO_RE = re.compile(r"^早报音频_(\d{4}-\d{2}-\d{2})\.mp3$")
+AUDIO_PAGE_RE = re.compile(r"^早报音频_(\d{4}-\d{2}-\d{2})\.html$")
 WEEKDAY_CN = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
 
@@ -208,8 +210,118 @@ function tnForceReload(){
 """
 
 
-def build_index(rows):
+def collect_audio():
+    """收集已合成的音频，返回 {日期: mp3文件名}。只认 output/ 里的 mp3。"""
+    found = {}
+    if not os.path.isdir(SRC):
+        return found
+    for fn in os.listdir(SRC):
+        m = AUDIO_RE.match(fn)
+        if m:
+            found[m.group(1)] = fn
+    return found
+
+
+AUDIO_TPL = r"""<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="早报音频">
+<meta name="theme-color" content="__NAV_BG__">
+<link rel="apple-touch-icon" href="app-icon.png">
+<title>语音早报 · __DATE__</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--fg:#1c1c1a;--mut:#6b6a66;--line:#e2e1dc;--acc:#b3261e}
+@media(prefers-color-scheme:dark){:root{--bg:#141413;--card:#1f1f1e;--fg:#eceae4;--mut:#a5a29b;--line:#33322f;--acc:#e2645c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif}
+.wrap{max-width:820px;margin:0 auto;padding:26px 22px 80px}
+.hd{text-align:center;margin:6px 0 22px}
+.hd h1{font-size:22px;margin:0 0 6px;font-weight:600}
+.hd p{color:var(--mut);font-size:13.5px;margin:0}
+.player{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 16px;margin:0 0 18px}
+.player audio{width:100%;display:block}
+.links{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:0 0 26px}
+.links a{color:var(--acc);text-decoration:none;font-size:14px;border:1px solid var(--line);
+border-radius:8px;padding:8px 16px;background:var(--card)}
+.links a:active{opacity:.6}
+.script{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 22px}
+.script h2{font-size:15px;margin:0 0 12px;color:var(--acc)}
+.script p{margin:0 0 12px;font-size:14.5px;line-height:1.85}
+.script p:last-child{margin-bottom:0}
+footer{color:var(--mut);font-size:12px;margin-top:26px;text-align:center}
+</style></head><body><div class="wrap">
+<div class="hd"><h1>🎧 语音早报</h1><p>__DATE__ · __DURATION__</p></div>
+<div class="player"><audio controls preload="metadata" src="__MP3__"></audio></div>
+<div class="links">
+<a href="__TEXT_URL__">📖 看文字版</a>
+<a href="index.html?v=__BUILD__">🆕 回最新一期</a>
+<a href="list.html?v=__BUILD__">🗓 往期</a>
+</div>
+<div class="script"><h2>播报稿</h2>__SCRIPT__</div>
+<footer>由多伦多新闻早报自动生成 · 中文语音播报</footer>
+</div></body></html>"""
+
+
+def build_audio_page(date, mp3_fn, build):
+    """为某期生成语音页：播放器 + 回文字版/最新/往期 + 逐字播报稿。"""
+    md_date = date
+    text_fn = "多伦多新闻早报_%s.html" % date
+    mp3_path = os.path.join(OUT, mp3_fn)
+    size_kb = os.path.getsize(mp3_path) // 1024 if os.path.isfile(mp3_path) else 0
+    # edge-tts 默认 48kbps 单声道 ≈ 6KB/s，粗估时长就行，给个「约 X 分钟」
+    minutes = max(1, round(size_kb / 360.0)) if size_kb else 0
+    duration = "约 %d 分钟" % minutes if minutes else "语音版"
+
+    script_html = ""
+    txt_path = os.path.join(SRC, "播报稿_%s.txt" % md_date)
+    if os.path.isfile(txt_path):
+        with open(txt_path, encoding="utf-8") as f:
+            for para in f.read().split("\n"):
+                para = para.strip()
+                if para:
+                    script_html += "<p>%s</p>" % esc(para)
+    if not script_html:
+        script_html = "<p>（本期播报稿暂缺）</p>"
+
+    page = AUDIO_TPL
+    page = page.replace("__NAV_BG__", NAV_BG)
+    page = page.replace("__DATE__", esc(date))
+    page = page.replace("__DURATION__", esc(duration))
+    page = page.replace("__MP3__", esc(quote(mp3_fn)))
+    page = page.replace("__TEXT_URL__", esc(quote(text_fn)))
+    page = page.replace("__BUILD__", str(build))
+    page = page.replace("__SCRIPT__", script_html)
+    # 图片音频页不用通用导航条（已有自己的 links 区），但要保留禁缓存 + 版本自愈
+    page = page.replace("</head>", CACHE_META + "</head>", 1)
+    page = page.replace("</body>", SYNC_JS.replace("__BUILD__", str(build)) + "</body>", 1)
+    return page
+
+
+def add_audio_button(html, date, audio_map, build):
+    """在正文页顶部插一个「听语音版」按钮；本期无音频则原样返回。"""
+    if date not in audio_map:
+        return html
+    audio_fn = audio_map[date]
+    url = esc(quote("早报音频_%s.html" % date)) + "?v=%s" % build
+    btn = (
+        '<div style="max-width:820px;margin:14px auto 0;padding:0 22px;">'
+        '<a href="%s" style="display:block;text-align:center;text-decoration:none;'
+        'background:var(--card);border:1px solid var(--acc);color:var(--acc);'
+        'border-radius:12px;padding:11px 16px;font:15px/1.4 -apple-system,'
+        'BlinkMacSystemFont,\'PingFang SC\',sans-serif;font-weight:600;">'
+        '🎧 听本期语音播报</a></div>' % url
+    )
+    m = re.search(r"<body[^>]*>", html)
+    if m:
+        return html[:m.end()] + btn + html[m.end():]
+    return btn + html
+
+
+def build_index(rows, audio_map=None, build=None):
     """首页 = 最新一期早报全文（根网址直接可读，永不锁日期）。"""
+    audio_map = audio_map or {}
+    build = build or BUILD_ID
     latest_date, latest_fn = rows[0]
     with open(os.path.join(SRC, latest_fn), encoding="utf-8") as f:
         html = strip_conflict_markers(f.read(), latest_fn)
@@ -250,10 +362,12 @@ def build_index(rows):
         html = html.replace("</body>", js + "</body>", 1)
     else:
         html += js
+    # 首页（最新一期）也放「听语音版」入口，双页面互跳的其中一端
+    html = add_audio_button(html, latest_date, audio_map, build)
     return html
 
 
-def build_list(rows):
+def build_list(rows, audio_map=None, build=None):
     """往期列表页。"""
     today = datetime.now().strftime("%Y-%m-%d")
     items = []
@@ -263,6 +377,8 @@ def build_list(rows):
         except Exception:
             wd = ""
         badge = '<span class="today">今天</span>' if d == today else ""
+        if audio_map and d in audio_map:
+            badge += '<span class="w">🎧 语音</span>'
         items.append('<a class="item" href="%s"><span class="d">%s月%s日</span>'
                      '<span class="w">%s</span>%s</a>'
                      % (esc(quote(fn)), int(d[5:7]), int(d[8:10]), wd, badge))
@@ -544,10 +660,14 @@ def main():
         print("output/ 目录为空，未构建：%s" % SRC)
         return 1
 
+    audio_map = collect_audio()
+
     os.makedirs(OUT, exist_ok=True)
-    # 只清理旧报告，保留 app-icon.png 等静态资源
+    # 只清理旧报告/旧音频页/旧 mp3，保留 app-icon.png 等静态资源
     for fn in os.listdir(OUT):
-        if REPORT_RE.match(fn) or fn in ("index.html", "list.html"):
+        if (REPORT_RE.match(fn) or AUDIO_PAGE_RE.match(fn)
+                or AUDIO_RE.match(fn)
+                or fn in ("index.html", "list.html")):
             os.remove(os.path.join(OUT, fn))
 
     n = 0
@@ -555,11 +675,24 @@ def main():
         with open(os.path.join(SRC, fn), encoding="utf-8") as f:
             page = f.read()
         page = strip_conflict_markers(page, fn)
+        # 有语音的期数，正文顶部给一个「听语音版」入口
+        page = add_audio_button(page, d, audio_map, BUILD_ID)
         # 往期正文页也要有导航，否则点进去就出不来
         page = inject_chrome(page, BUILD_ID, "report")
         with open(os.path.join(OUT, fn), "w", encoding="utf-8") as f:
             f.write(page)
         n += 1
+
+    # 语音页 + mp3：复制到发布目录，跟文字页同域名，互跳用相对路径
+    for date, mp3_fn in audio_map.items():
+        src_mp3 = os.path.join(SRC, mp3_fn)
+        if not os.path.isfile(src_mp3):
+            continue
+        shutil.copy2(src_mp3, os.path.join(OUT, mp3_fn))
+        audio_page = build_audio_page(date, mp3_fn, BUILD_ID)
+        with open(os.path.join(OUT, "早报音频_%s.html" % date), "w",
+                  encoding="utf-8") as f:
+            f.write(strip_conflict_markers(audio_page, "audio_" + date))
 
     # 图标放在仓库根目录，每次构建都同步到 docs/（主屏「添加到主屏幕」用）
     icon = os.path.join(HERE, "app-icon.png")
@@ -567,9 +700,11 @@ def main():
         shutil.copy2(icon, os.path.join(OUT, "app-icon.png"))
 
     with open(os.path.join(OUT, "index.html"), "w", encoding="utf-8") as f:
-        f.write(strip_conflict_markers(build_index(rows), "index.html"))
+        f.write(strip_conflict_markers(
+            build_index(rows, audio_map, BUILD_ID), "index.html"))
     with open(os.path.join(OUT, "list.html"), "w", encoding="utf-8") as f:
-        f.write(strip_conflict_markers(build_list(rows), "list.html"))
+        f.write(strip_conflict_markers(
+            build_list(rows, audio_map, BUILD_ID), "list.html"))
 
     # 站内搜索：索引 + 页面
     entries = collect_search(rows)

@@ -1,0 +1,3 @@
+# 云端早报工作流依赖（GitHub Actions 用）
+# generate.py / build_site.py 只用标准库，这里只放语音合成需要的包
+edge-tts==7.3.1
