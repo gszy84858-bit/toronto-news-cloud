@@ -247,12 +247,17 @@ border-radius:8px;padding:8px 16px;background:var(--card)}
 .links a:active{opacity:.6}
 .script{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 22px}
 .script h2{font-size:15px;margin:0 0 12px;color:var(--acc)}
-.script p{margin:0 0 12px;font-size:14.5px;line-height:1.85}
+.script p{margin:0 0 12px;font-size:14.5px;line-height:1.85;border-radius:8px;
+padding:6px 10px;transition:background .25s,color .25s;cursor:pointer}
 .script p:last-child{margin-bottom:0}
+.script p.tn-on{background:rgba(179,38,30,.10);color:var(--acc);font-weight:500}
+.script p.tn-on::before{content:'▶ '}
+.tip{text-align:center;color:var(--mut);font-size:12px;margin:0 0 18px}
 footer{color:var(--mut);font-size:12px;margin-top:26px;text-align:center}
 </style></head><body><div class="wrap">
 <div class="hd"><h1>🎧 语音早报</h1><p>__DATE__ · __DURATION__</p></div>
-<div class="player"><audio controls preload="metadata" src="__MP3__"></audio></div>
+<div class="player"><audio id="tnAudio" controls preload="metadata" src="__MP3__"></audio></div>
+<p class="tip">__TIP__</p>
 <div class="links">
 <a href="__TEXT_URL__">📖 看文字版</a>
 <a href="index.html?v=__BUILD__">🆕 回最新一期</a>
@@ -260,7 +265,77 @@ footer{color:var(--mut);font-size:12px;margin-top:26px;text-align:center}
 </div>
 <div class="script"><h2>播报稿</h2>__SCRIPT__</div>
 <footer>由多伦多新闻早报自动生成 · 中文语音播报</footer>
-</div></body></html>"""
+</div>__HLJS__
+</body></html>"""
+
+
+# 播放高亮跟随：把句子级时间戳映射到播报稿段落，播到哪段亮哪段。
+# 时间戳来自 speak.py 生成的时间戳_日期.json；缺失时整段 JS 留空，优雅降级。
+HIGHLIGHT_JS = r"""
+<script>
+(function(){
+  var A=document.getElementById("tnAudio");
+  var TL=__TIMELINE__;
+  var paras=Array.prototype.slice.call(document.querySelectorAll(".script p[data-n]"));
+  if(!A||!TL||!TL.length||!paras.length) return;
+  // 每条新闻可能对应多个开场段(n=0)；按出现顺序把 para 依次配给同 n 的时间段
+  var groups={};
+  paras.forEach(function(p){
+    var n=parseInt(p.getAttribute("data-n"),10)||0;
+    (groups[n]=groups[n]||[]).push(p);
+  });
+  var segs=[]; // {start,end,paras:[...]}
+  Object.keys(groups).forEach(function(n){
+    var ts=TL.filter(function(x){return (x.n||0)===parseInt(n,10);});
+    var ps=groups[n];
+    ps.forEach(function(p,i){
+      var t=ts[i];
+      if(t) segs.push({start:t.start,end:t.end,node:p});
+    });
+  });
+  segs.sort(function(a,b){return a.start-b.start;});
+  if(!segs.length) return;
+  var cur=-1, autoScroll=true;
+  function activate(i,scroll){
+    if(i===cur) return;
+    paras.forEach(function(p){p.classList.remove("tn-on");});
+    cur=i;
+    if(i<0) return;
+    segs[i].node.classList.add("tn-on");
+    if(scroll&&autoScroll){
+      try{segs[i].node.scrollIntoView({block:"center",behavior:"smooth"});}catch(e){}
+    }
+  }
+  A.addEventListener("timeupdate",function(){
+    var t=A.currentTime, hit=-1;
+    for(var i=0;i<segs.length;i++){
+      if(t>=segs[i].start && t<segs[i].end+0.6){ hit=i; break; }
+    }
+    activate(hit,true);
+  });
+  A.addEventListener("seeking",function(){ autoScroll=true; });
+  // 点段落跳转播放对应时间
+  segs.forEach(function(s,i){
+    s.node.addEventListener("click",function(){
+      A.currentTime=Math.max(0,s.start-0.2);
+      autoScroll=false;
+      try{A.play();}catch(e){}
+    });
+  });
+})();
+</script>"""
+
+
+def _audio_cn_num(s):
+    """中文数字转阿拉伯数字（播报稿段落的「第N条」序号）。"""
+    d = {"零": 0, "一": 1, "二": 2, "三": 3, "四": 4,
+         "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+    if s == "十":
+        return 10
+    if "十" in s:
+        a, b = s.split("十", 1)
+        return (d.get(a, 1) if a else 1) * 10 + (d.get(b, 0) if b else 0)
+    return d.get(s, 0)
 
 
 def build_audio_page(date, mp3_fn, build):
@@ -273,16 +348,35 @@ def build_audio_page(date, mp3_fn, build):
     minutes = max(1, round(size_kb / 360.0)) if size_kb else 0
     duration = "约 %d 分钟" % minutes if minutes else "语音版"
 
+    # 读时间戳（speak.py 可选产出），缺失就降级成无高亮的静态播报稿
+    timeline = []
+    tl_path = os.path.join(SRC, "时间戳_%s.json" % md_date)
+    if os.path.isfile(tl_path):
+        try:
+            with open(tl_path, encoding="utf-8") as f:
+                timeline = json.load(f).get("items", []) or []
+        except Exception:
+            timeline = []
+
     script_html = ""
     txt_path = os.path.join(SRC, "播报稿_%s.txt" % md_date)
     if os.path.isfile(txt_path):
         with open(txt_path, encoding="utf-8") as f:
             for para in f.read().split("\n"):
                 para = para.strip()
-                if para:
-                    script_html += "<p>%s</p>" % esc(para)
+                if not para:
+                    continue
+                m = re.match(r"^第([一二三四五六七八九十百]+)条[，,]", para)
+                n = _audio_cn_num(m.group(1)) if m else 0
+                script_html += '<p data-n="%d">%s</p>' % (n, esc(para))
     if not script_html:
         script_html = "<p>（本期播报稿暂缺）</p>"
+
+    has_tl = bool(timeline)
+    tip = ("播放时会自动高亮当前段落，点段落可跳转到那里"
+           if has_tl else "点段落可跟随文字阅读")
+    hl_js = (HIGHLIGHT_JS.replace("__TIMELINE__", json.dumps(timeline, ensure_ascii=False))
+             if has_tl else "")
 
     page = AUDIO_TPL
     page = page.replace("__NAV_BG__", NAV_BG)
@@ -292,6 +386,8 @@ def build_audio_page(date, mp3_fn, build):
     page = page.replace("__TEXT_URL__", esc(quote(text_fn)))
     page = page.replace("__BUILD__", str(build))
     page = page.replace("__SCRIPT__", script_html)
+    page = page.replace("__TIP__", tip)
+    page = page.replace("__HLJS__", hl_js)
     # 图片音频页不用通用导航条（已有自己的 links 区），但要保留禁缓存 + 版本自愈
     page = page.replace("</head>", CACHE_META + "</head>", 1)
     page = page.replace("</body>", SYNC_JS.replace("__BUILD__", str(build)) + "</body>", 1)

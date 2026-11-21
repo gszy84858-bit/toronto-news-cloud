@@ -25,6 +25,7 @@
 
 import argparse
 import asyncio
+import json
 import os
 import re
 import sys
@@ -148,10 +149,72 @@ def build_script(date_display, items):
     return "\n".join(parts)
 
 
+_TICK = 10_000_000  # edge-tts 时间戳单位：100 纳秒，即 1 秒 = 1e7
+_ORDINAL_RE = re.compile(r"^第([一二三四五六七八九十百]+)条[，,]")
+
+
+def _cn_num(s):
+    """中文数字转阿拉伯数字（够用即可，覆盖 1~99 的条目序号）。"""
+    d = {"零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+         "六": 6, "七": 7, "八": 8, "九": 9}
+    if s == "十":
+        return 10
+    if "十" in s:
+        a, b = s.split("十", 1)
+        return (d.get(a, 1) if a else 1) * 10 + (d.get(b, 0) if b else 0)
+    return d.get(s, 0)
+
+
+def _build_timeline(boundaries):
+    """把句子边界归类成「每条新闻的起止秒数」，供网页播放时高亮跟随。
+
+    boundaries: [(offset_tick, duration_tick, text), ...] 按时间顺序。
+    遇到「第N条，」就切到下一条；开场/结尾归到 n=0。
+    """
+    items = []
+    current = None  # 当前所属条目，后续句子都归到它，直到遇到下一个「第N条」
+    for off, dur, txt in boundaries:
+        txt = (txt or "").strip()
+        start = off / float(_TICK)
+        end = (off + dur) / float(_TICK)
+        m = _ORDINAL_RE.match(txt)
+        if m:
+            n = _cn_num(m.group(1))
+            current = {"n": n, "start": round(start, 2), "end": round(end, 2)}
+            items.append(current)
+        elif current is not None:
+            # 同一条新闻的后续句子：延伸结束时间
+            current["end"] = round(end, 2)
+        else:
+            # 开场白（还没到第一条）：单独记为 n=0，结束时间稍后被第一条覆盖
+            items.append({"n": 0, "start": round(start, 2), "end": round(end, 2)})
+    # 开场（n=0）的 end 不应吞掉全程：截到第一条开始
+    first_start = next((it["start"] for it in items if it["n"] >= 1), None)
+    for it in items:
+        if it["n"] == 0 and first_start is not None and it["end"] > first_start:
+            it["end"] = first_start
+    return items
+
+
 async def _synthesize(text, mp3_path, voice, rate):
+    """合成 mp3，并顺带收集句子边界时间戳。"""
     import edge_tts
     communicate = edge_tts.Communicate(text, voice, rate=rate)
-    await communicate.save(mp3_path)
+    boundaries = []
+    with open(mp3_path, "wb") as f:
+        async for chunk in communicate.stream():
+            if chunk.get("type") == "audio":
+                f.write(chunk["data"])
+            elif chunk.get("type") == "SentenceBoundary":
+                off = int(chunk.get("offset", 0))
+                dur = int(chunk.get("duration", 0))
+                boundaries.append((off, dur, chunk.get("text", "")))
+            elif chunk.get("type") == "WordBoundary":
+                # 兼容旧版 edge-tts：用 offset + duration 近似成句子
+                off = int(chunk.get("offset", 0))
+                dur = int(chunk.get("duration", 0))
+                boundaries.append((off, dur, chunk.get("text", "")))
+    return _build_timeline(boundaries)
 
 
 def main(argv=None):
@@ -183,7 +246,7 @@ def main(argv=None):
     mp3_path = os.path.join(out_dir, "早报音频_%s.mp3" % date_str)
     t0 = time.time()
     try:
-        asyncio.run(_synthesize(script, mp3_path, args.voice, args.rate))
+        timeline = asyncio.run(_synthesize(script, mp3_path, args.voice, args.rate))
     except Exception as e:
         print("语音合成失败：%s: %s" % (type(e).__name__, e), file=sys.stderr)
         return 4
@@ -191,6 +254,26 @@ def main(argv=None):
     if not os.path.isfile(mp3_path) or os.path.getsize(mp3_path) < 2000:
         print("音频文件异常（过小或未生成）：%s" % mp3_path, file=sys.stderr)
         return 5
+
+    # 时间戳写盘，供网页「播到哪亮到哪」。失败不影响音频本身。
+    tl_path = os.path.join(out_dir, "时间戳_%s.json" % date_str)
+    try:
+        with open(tl_path, "w", encoding="utf-8") as f:
+            json.dump({"date": date_str, "items": timeline or []}, f,
+                      ensure_ascii=False, separators=(",", ":"))
+    except Exception as e:
+        print("时间戳写入失败（不影响音频）：%s" % e, file=sys.stderr)
+
+    # 顺手清理超过 60 天的时间戳 JSON（mp3/txt 由工作流清理，这里只管自己派生的）
+    try:
+        from datetime import timedelta
+        cutoff = (datetime.now(_TZ) - timedelta(days=60)).strftime("%Y-%m-%d")
+        for fn in os.listdir(out_dir):
+            m = re.match(r"^时间戳_(\d{4}-\d{2}-\d{2})\.json$", fn)
+            if m and m.group(1) < cutoff:
+                os.remove(os.path.join(out_dir, fn))
+    except Exception:
+        pass
 
     if not args.quiet:
         size_kb = os.path.getsize(mp3_path) // 1024
