@@ -388,9 +388,11 @@ def build_audio_page(date, mp3_fn, build):
     page = page.replace("__SCRIPT__", script_html)
     page = page.replace("__TIP__", tip)
     page = page.replace("__HLJS__", hl_js)
-    # 图片音频页不用通用导航条（已有自己的 links 区），但要保留禁缓存 + 版本自愈
+    # 音频页不用通用导航条（已有自己的 links 区）。
+    # 关键：绝不能注入 SYNC_JS——它会定时比对 build 号并 location.replace 整页刷新，
+    # 播放中一刷新就会掐断音频（表现为“播到第一/二句就停”）。音频页是归档内容，
+    # 链接本身已带 ?v=build 版本参数，不需要自愈刷新，保留禁缓存即可。
     page = page.replace("</head>", CACHE_META + "</head>", 1)
-    page = page.replace("</body>", SYNC_JS.replace("__BUILD__", str(build)) + "</body>", 1)
     return page
 
 
