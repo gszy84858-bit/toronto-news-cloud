@@ -797,10 +797,13 @@ def main():
     if os.path.isfile(icon):
         shutil.copy2(icon, os.path.join(OUT, "app-icon.png"))
 
-    # 耳畔臻选分享封面：每次构建同步到 docs/，供微信分享卡片抓取
+    # 耳畔臻选分享封面 + 落地页：每次构建同步到 docs/，供微信分享卡片抓取
     share_cover = os.path.join(HERE, "erpan-cover.png")
     if os.path.isfile(share_cover):
         shutil.copy2(share_cover, os.path.join(OUT, "erpan-cover.png"))
+    share_page = os.path.join(HERE, "erpan-share.html")
+    if os.path.isfile(share_page):
+        shutil.copy2(share_page, os.path.join(OUT, "erpan.html"))
 
     with open(os.path.join(OUT, "index.html"), "w", encoding="utf-8") as f:
         f.write(strip_conflict_markers(
