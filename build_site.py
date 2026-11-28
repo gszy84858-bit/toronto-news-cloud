@@ -804,6 +804,11 @@ def main():
     share_page = os.path.join(HERE, "erpan-share.html")
     if os.path.isfile(share_page):
         shutil.copy2(share_page, os.path.join(OUT, "erpan.html"))
+    # 永久跳板页：erpan2.html 不写死应用地址，每次读本体版本信标，
+    # 解决微信按域名+路径缓存导致老链接永远是旧版的问题。
+    share_page2 = os.path.join(HERE, "erpan2.html")
+    if os.path.isfile(share_page2):
+        shutil.copy2(share_page2, os.path.join(OUT, "erpan2.html"))
 
     with open(os.path.join(OUT, "index.html"), "w", encoding="utf-8") as f:
         f.write(strip_conflict_markers(
