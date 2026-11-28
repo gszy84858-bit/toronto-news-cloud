@@ -52,7 +52,7 @@
   }
   // JSONP：<script> 跨域加载不受同源策略限制，时间戳破缓存
   var s = document.createElement('script');
-  s.src = 'https://erpan-zhenxuan.app.workbuddy.host/version.js?t=' + Date.now();
+  s.src = 'https://erpan-zhenxuan.app.workbuddy.host/version.js?sharecode=5WXYLRAUPD&t=' + Date.now();
   s.onload = onBeacon;
   s.onerror = function () { clearTimeout(timer); go(FALLBACK); };
   document.head.appendChild(s);
