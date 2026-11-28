@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>耳畔臻选 · 正在进入</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#17150f;color:#f3ecdc;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:24px}
+  .card{max-width:420px}
+  .mark{width:64px;height:64px;border-radius:18px;background:#f0b429;color:#1a160c;display:grid;place-items:center;font-size:30px;margin:0 auto 20px}
+  h1{font-size:22px;font-weight:500;margin:0 0 10px}
+  p{color:#a9a08c;font-size:14px;line-height:1.7;margin:0}
+  a{display:inline-block;background:#f0b429;color:#1a160c;text-decoration:none;border-radius:999px;padding:12px 28px;font-size:15px;font-weight:500;margin-top:22px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="mark">耳</div>
+    <h1>耳畔臻选</h1>
+    <p>正在为你打开最新版…</p>
+    <a id="enter" href="https://erpan-zhenxuan.app.workbuddy.host/?sharecode=5WXYLRAUPD">点击进入收听</a>
+  </div>
+<script>
+  // 永久跳板：用 JSONP 读取本体上的版本信标（跨域名，script 标签不受同源限制）。
+  // 信标 URL 带时间戳，微信不会缓存，永远拿到最新目标地址。
+  // 本逻辑一次装好不再改变 —— 以后升级只改本体的 version.js，链接与二维码都不用换。
+  var BASE = 'https://erpan-zhenxuan.app.workbuddy.host/';
+  var FALLBACK = 'https://erpan-zhenxuan.app.workbuddy.host/?sharecode=5WXYLRAUPD';
+  var done = false;
+  function go(url) {
+    if (done) return;
+    done = true;
+    document.getElementById('enter').href = url;
+    location.replace(url);
+  }
+  window.__ERPAN_TARGET__ = null;
+  window.__onVersion = function () {
+    go(window.__ERPAN_TARGET__ || FALLBACK);
+  };
+  var s = document.createElement('script');
+  s.src = BASE + 'version.js?t=' + Date.now() + '&sharecode=5WXYLRAUPD';
+  s.onerror = function () { go(FALLBACK); };
+  document.head.appendChild(s);
+  setTimeout(function () { go(FALLBACK); }, 3000);
+</script>
+</body>
+</html>
